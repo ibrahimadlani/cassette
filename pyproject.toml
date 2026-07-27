@@ -45,3 +45,64 @@ Issues = "https://github.com/ibrahimadlani/cassette/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cassette"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["cassette", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "D",   # pydocstyle
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "PTH", # flake8-use-pathlib
+    "RET", # flake8-return
+    "RUF", # ruff-specific
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+ignore = [
+    "D105", # magic methods do not need a docstring
+    "D107", # __init__ is documented on the class
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D101", "D102", "D103", "D104"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+disallow_any_generics = true
+show_error_codes = true
+files = ["cassette", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+markers = ["slow: takes more than a second, excluded from the fast loop"]
+
+[tool.coverage.run]
+source = ["cassette"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
