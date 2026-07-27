@@ -1,0 +1,32 @@
+.PHONY: help install lint format types test clean
+
+PYTHON ?= python3
+VENV   := .venv
+BIN    := $(VENV)/bin
+
+help:
+	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+install: ## create the virtualenv and install the project with dev extras
+	$(PYTHON) -m venv $(VENV)
+	$(BIN)/pip install --upgrade pip
+	$(BIN)/pip install -e ".[dev]"
+
+lint: ## run ruff over the whole tree
+	$(BIN)/ruff check .
+	$(BIN)/ruff format --check .
+
+format: ## rewrite the tree with ruff format
+	$(BIN)/ruff check --fix .
+	$(BIN)/ruff format .
+
+types: ## run mypy in strict mode
+	$(BIN)/mypy
+
+test: ## run the test suite with coverage
+	$(BIN)/pytest --cov --cov-report=term-missing
+
+clean: ## remove caches and build artefacts
+	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist
+	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
