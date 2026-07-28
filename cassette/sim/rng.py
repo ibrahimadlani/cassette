@@ -57,3 +57,24 @@ class Rng:
         if not population:
             raise ValueError("cannot choose from an empty population")
         return population[self.randint(0, len(population) - 1)]
+
+    def shuffle(self, items: list[T]) -> None:
+        """Shuffle `items` in place with a Fisher-Yates pass."""
+        for i in range(len(items) - 1, 0, -1):
+            j = self.randint(0, i)
+            items[i], items[j] = items[j], items[i]
+
+    def sample(self, population: Sequence[T], size: int) -> list[T]:
+        """Draw `size` distinct elements, in the order they were selected.
+
+        A partial Fisher-Yates over a copy: O(len(population)) but with a draw
+        count that depends only on `size`, which keeps the sequence predictable
+        when a caller changes the population without changing the sample size.
+        """
+        if not 0 <= size <= len(population):
+            raise ValueError(f"cannot sample {size} of {len(population)}")
+        pool = list(population)
+        for i in range(size):
+            j = self.randint(i, len(pool) - 1)
+            pool[i], pool[j] = pool[j], pool[i]
+        return pool[:size]

@@ -63,3 +63,44 @@ def test_choice_only_returns_members() -> None:
 def test_choice_rejects_an_empty_population() -> None:
     with pytest.raises(ValueError, match="empty population"):
         Rng(7).choice([])
+
+
+def test_shuffle_is_a_permutation() -> None:
+    items = list(range(20))
+    Rng(7).shuffle(items)
+    assert sorted(items) == list(range(20))
+    assert items != list(range(20))
+
+
+def test_shuffle_of_a_short_list_is_stable_under_a_seed() -> None:
+    left, right = [1, 2, 3, 4], [1, 2, 3, 4]
+    Rng(99).shuffle(left)
+    Rng(99).shuffle(right)
+    assert left == right
+
+
+def test_sample_returns_distinct_elements() -> None:
+    drawn = Rng(7).sample(list(range(10)), 4)
+    assert len(drawn) == 4
+    assert len(set(drawn)) == 4
+
+
+def test_sample_of_everything_is_a_permutation() -> None:
+    assert sorted(Rng(7).sample(list(range(6)), 6)) == list(range(6))
+
+
+def test_sample_of_nothing_is_empty() -> None:
+    assert Rng(7).sample([1, 2, 3], 0) == []
+
+
+def test_sample_draw_count_depends_only_on_the_size() -> None:
+    small, large = Rng(7), Rng(7)
+    small.sample(list(range(5)), 2)
+    large.sample(list(range(50)), 2)
+    assert small.random() == large.random()
+
+
+@pytest.mark.parametrize("size", [-1, 4])
+def test_sample_rejects_an_impossible_size(size: int) -> None:
+    with pytest.raises(ValueError, match="cannot sample"):
+        Rng(7).sample([1, 2, 3], size)
