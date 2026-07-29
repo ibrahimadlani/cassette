@@ -73,7 +73,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["cassette"]
+known-first-party = ["cassette", "tests"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
