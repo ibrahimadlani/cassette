@@ -1,0 +1,106 @@
+import pytest
+
+from cassette.sim.rng import Rng
+
+
+def test_the_same_seed_draws_the_same_sequence() -> None:
+    left = [Rng(8421).random() for _ in range(50)]
+    right = [Rng(8421).random() for _ in range(50)]
+    assert left == right
+
+
+def test_different_seeds_diverge() -> None:
+    assert Rng(1).random() != Rng(2).random()
+
+
+def test_exposes_its_seed() -> None:
+    assert Rng(8421).seed == 8421
+
+
+def test_random_stays_in_the_unit_interval() -> None:
+    rng = Rng(7)
+    assert all(0.0 <= rng.random() < 1.0 for _ in range(1_000))
+
+
+def test_chance_never_fires_at_zero() -> None:
+    rng = Rng(7)
+    assert not any(rng.chance(0.0) for _ in range(1_000))
+
+
+def test_chance_always_fires_at_one() -> None:
+    rng = Rng(7)
+    assert all(rng.chance(1.0) for _ in range(1_000))
+
+
+def test_chance_consumes_one_draw_whatever_the_probability() -> None:
+    never, always = Rng(7), Rng(7)
+    never.chance(0.0)
+    always.chance(1.0)
+    assert never.random() == always.random()
+
+
+def test_randint_covers_both_bounds() -> None:
+    rng = Rng(7)
+    drawn = {rng.randint(0, 3) for _ in range(1_000)}
+    assert drawn == {0, 1, 2, 3}
+
+
+def test_randint_on_a_single_value_range() -> None:
+    assert Rng(7).randint(4, 4) == 4
+
+
+def test_randint_rejects_an_empty_range() -> None:
+    with pytest.raises(ValueError, match=r"empty range \[5, 4\]"):
+        Rng(7).randint(5, 4)
+
+
+def test_choice_only_returns_members() -> None:
+    rng = Rng(7)
+    population = ["a", "b", "c"]
+    assert all(rng.choice(population) in population for _ in range(200))
+
+
+def test_choice_rejects_an_empty_population() -> None:
+    with pytest.raises(ValueError, match="empty population"):
+        Rng(7).choice([])
+
+
+def test_shuffle_is_a_permutation() -> None:
+    items = list(range(20))
+    Rng(7).shuffle(items)
+    assert sorted(items) == list(range(20))
+    assert items != list(range(20))
+
+
+def test_shuffle_of_a_short_list_is_stable_under_a_seed() -> None:
+    left, right = [1, 2, 3, 4], [1, 2, 3, 4]
+    Rng(99).shuffle(left)
+    Rng(99).shuffle(right)
+    assert left == right
+
+
+def test_sample_returns_distinct_elements() -> None:
+    drawn = Rng(7).sample(list(range(10)), 4)
+    assert len(drawn) == 4
+    assert len(set(drawn)) == 4
+
+
+def test_sample_of_everything_is_a_permutation() -> None:
+    assert sorted(Rng(7).sample(list(range(6)), 6)) == list(range(6))
+
+
+def test_sample_of_nothing_is_empty() -> None:
+    assert Rng(7).sample([1, 2, 3], 0) == []
+
+
+def test_sample_draw_count_depends_only_on_the_size() -> None:
+    small, large = Rng(7), Rng(7)
+    small.sample(list(range(5)), 2)
+    large.sample(list(range(50)), 2)
+    assert small.random() == large.random()
+
+
+@pytest.mark.parametrize("size", [-1, 4])
+def test_sample_rejects_an_impossible_size(size: int) -> None:
+    with pytest.raises(ValueError, match="cannot sample"):
+        Rng(7).sample([1, 2, 3], size)

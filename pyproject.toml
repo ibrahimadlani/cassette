@@ -72,6 +72,9 @@ ignore = [
     "D107", # __init__ is documented on the class
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["cassette", "tests"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
