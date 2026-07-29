@@ -73,6 +73,21 @@ class Scheduler:
             return event
         return None
 
+    def peek_time(self) -> int | None:
+        """The timestamp of the next live event, without delivering it.
+
+        Cancelled entries sitting at the head are discarded on the way, so the
+        answer is never a timestamp that will not actually be reached.
+        """
+        while self._heap:
+            time_ms, seq, _ = self._heap[0]
+            if seq in self._cancelled:
+                heapq.heappop(self._heap)
+                self._cancelled.discard(seq)
+                continue
+            return time_ms
+        return None
+
     @property
     def pending(self) -> int:
         """How many entries are queued, cancelled ones included."""
