@@ -35,6 +35,18 @@ class RestartNode:
 
 
 @dataclass(frozen=True, slots=True)
+class PauseNode:
+    """Freeze a node without killing it. Its state survives; its progress stops."""
+
+    until_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ResumeNode:
+    """Let a frozen node catch up on everything that queued behind it."""
+
+
+@dataclass(frozen=True, slots=True)
 class StartPartition:
     """Cut the cluster into groups that cannot see each other."""
 
@@ -47,7 +59,14 @@ class HealPartition:
 
 
 Action: TypeAlias = (
-    DeliverMessage | FireTimer | CrashNode | RestartNode | StartPartition | HealPartition
+    DeliverMessage
+    | FireTimer
+    | CrashNode
+    | RestartNode
+    | PauseNode
+    | ResumeNode
+    | StartPartition
+    | HealPartition
 )
 
 CONTROL: NodeId = -1

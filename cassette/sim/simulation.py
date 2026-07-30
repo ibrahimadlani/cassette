@@ -15,7 +15,9 @@ from cassette.sim.events import (
     Event,
     FireTimer,
     HealPartition,
+    PauseNode,
     RestartNode,
+    ResumeNode,
     StartPartition,
 )
 from cassette.sim.faults import FaultConfig
@@ -80,6 +82,7 @@ class Simulation:
         self._envs: dict[NodeId, NodeEnv] = {}
         self._timers: dict[tuple[NodeId, str], int] = {}
         self._down: set[NodeId] = set()
+        self._paused_until: dict[NodeId, int] = {}
 
     # -- wiring ---------------------------------------------------------
 
@@ -140,15 +143,44 @@ class Simulation:
         self.scheduler.schedule(0, node_id, CrashNode())
         self.scheduler.schedule(downtime_ms, node_id, RestartNode())
 
+    def schedule_pause(self, node_id: NodeId, duration_ms: int) -> None:
+        """Freeze a node for `duration_ms`, then let it catch up.
+
+        A pause is not a crash: nothing is lost, and nothing addressed to the
+        node is discarded. Work simply queues up and lands in a burst on the
+        far side, which is precisely the shape of a stop-the-world collection
+        and precisely what breaks lease- and timeout-based reasoning.
+        """
+        self.scheduler.schedule(0, node_id, PauseNode(self.clock.now + duration_ms))
+        self.scheduler.schedule(duration_ms, node_id, ResumeNode())
+
     def is_down(self, node_id: NodeId) -> bool:
         """Whether the node is currently crashed."""
         return node_id in self._down
+
+    def is_paused(self, node_id: NodeId) -> bool:
+        """Whether the node is currently frozen."""
+        return node_id in self._paused_until
+
+    def _pause(self, node_id: NodeId, until_ms: int) -> None:
+        if node_id not in self._nodes or node_id in self._down:
+            return
+        self._paused_until[node_id] = max(self._paused_until.get(node_id, 0), until_ms)
+        self.observer.record("node_pause", node=node_id, until=until_ms)
+
+    def _resume(self, node_id: NodeId) -> None:
+        deadline = self._paused_until.get(node_id)
+        if deadline is None or deadline > self.clock.now:
+            return
+        del self._paused_until[node_id]
+        self.observer.record("node_resume", node=node_id)
 
     def _crash(self, node_id: NodeId) -> None:
         node = self._nodes.get(node_id)
         if node is None or node_id in self._down:
             return
         self._down.add(node_id)
+        self._paused_until.pop(node_id, None)
         for pending in sorted(key for key in self._timers if key[0] == node_id):
             self.scheduler.cancel(self._timers.pop(pending))
         node.on_crash()
@@ -207,6 +239,10 @@ class Simulation:
                 self._crash(event.node)
             case RestartNode():
                 self._restart(event.node)
+            case PauseNode() as action:
+                self._pause(event.node, action.until_ms)
+            case ResumeNode():
+                self._resume(event.node)
 
     def _deliver(self, recipient: NodeId, action: DeliverMessage) -> None:
         node = self._nodes.get(recipient)
@@ -217,6 +253,10 @@ class Simulation:
             return
         if recipient in self._down:
             self.network.report_drop(action.sender, recipient, action.msg_id, "crashed")
+            return
+        resume_at = self._paused_until.get(recipient)
+        if resume_at is not None:
+            self.scheduler.schedule_at(resume_at, recipient, action)
             return
         self.observer.record(
             "msg_deliver",
@@ -233,7 +273,14 @@ class Simulation:
             return
         if self._timers.get((event.node, action.tag)) != event.seq:
             return
-        del self._timers[event.node, action.tag]
         if event.node in self._down:
+            del self._timers[event.node, action.tag]
             return
+        resume_at = self._paused_until.get(event.node)
+        if resume_at is not None:
+            self._timers[event.node, action.tag] = self.scheduler.schedule_at(
+                resume_at, event.node, action
+            )
+            return
+        del self._timers[event.node, action.tag]
         node.on_timer(self._envs[event.node], action.tag)
