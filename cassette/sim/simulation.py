@@ -10,10 +10,12 @@ from cassette.sim.clock import VirtualClock
 from cassette.sim.env import Env, Node
 from cassette.sim.events import (
     CONTROL,
+    CrashNode,
     DeliverMessage,
     Event,
     FireTimer,
     HealPartition,
+    RestartNode,
     StartPartition,
 )
 from cassette.sim.faults import FaultConfig
@@ -77,6 +79,7 @@ class Simulation:
         self._nodes: dict[NodeId, Node] = {}
         self._envs: dict[NodeId, NodeEnv] = {}
         self._timers: dict[tuple[NodeId, str], int] = {}
+        self._down: set[NodeId] = set()
 
     # -- wiring ---------------------------------------------------------
 
@@ -132,6 +135,33 @@ class Simulation:
         self.scheduler.schedule(0, CONTROL, StartPartition(groups))
         self.scheduler.schedule(duration_ms, CONTROL, HealPartition())
 
+    def schedule_crash(self, node_id: NodeId, downtime_ms: int) -> None:
+        """Kill a node now and bring it back after `downtime_ms`."""
+        self.scheduler.schedule(0, node_id, CrashNode())
+        self.scheduler.schedule(downtime_ms, node_id, RestartNode())
+
+    def is_down(self, node_id: NodeId) -> bool:
+        """Whether the node is currently crashed."""
+        return node_id in self._down
+
+    def _crash(self, node_id: NodeId) -> None:
+        node = self._nodes.get(node_id)
+        if node is None or node_id in self._down:
+            return
+        self._down.add(node_id)
+        for pending in sorted(key for key in self._timers if key[0] == node_id):
+            self.scheduler.cancel(self._timers.pop(pending))
+        node.on_crash()
+        self.observer.record("node_crash", node=node_id)
+
+    def _restart(self, node_id: NodeId) -> None:
+        node = self._nodes.get(node_id)
+        if node is None or node_id not in self._down:
+            return
+        self._down.discard(node_id)
+        node.on_restart(self._envs[node_id])
+        self.observer.record("node_restart", node=node_id)
+
     # -- the loop -------------------------------------------------------
 
     def step(self) -> bool:
@@ -173,6 +203,10 @@ class Simulation:
                 self.network.partition_into(action.groups)
             case HealPartition():
                 self.network.heal()
+            case CrashNode():
+                self._crash(event.node)
+            case RestartNode():
+                self._restart(event.node)
 
     def _deliver(self, recipient: NodeId, action: DeliverMessage) -> None:
         node = self._nodes.get(recipient)
@@ -180,6 +214,9 @@ class Simulation:
             return
         if not self.network.can_reach(action.sender, recipient):
             self.network.report_drop(action.sender, recipient, action.msg_id, "partition")
+            return
+        if recipient in self._down:
+            self.network.report_drop(action.sender, recipient, action.msg_id, "crashed")
             return
         self.observer.record(
             "msg_deliver",
@@ -197,4 +234,6 @@ class Simulation:
         if self._timers.get((event.node, action.tag)) != event.seq:
             return
         del self._timers[event.node, action.tag]
+        if event.node in self._down:
+            return
         node.on_timer(self._envs[event.node], action.tag)

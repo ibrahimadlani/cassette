@@ -25,6 +25,16 @@ class FireTimer:
 
 
 @dataclass(frozen=True, slots=True)
+class CrashNode:
+    """Kill a node: volatile state is lost, durable state survives."""
+
+
+@dataclass(frozen=True, slots=True)
+class RestartNode:
+    """Bring a crashed node back up."""
+
+
+@dataclass(frozen=True, slots=True)
 class StartPartition:
     """Cut the cluster into groups that cannot see each other."""
 
@@ -36,7 +46,9 @@ class HealPartition:
     """Put the cluster back together."""
 
 
-Action: TypeAlias = DeliverMessage | FireTimer | StartPartition | HealPartition
+Action: TypeAlias = (
+    DeliverMessage | FireTimer | CrashNode | RestartNode | StartPartition | HealPartition
+)
 
 CONTROL: NodeId = -1
 """The pseudo-node that owns fault events. No participant may claim this id."""
