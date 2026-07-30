@@ -6,6 +6,8 @@ a `NodeEnv` and nothing else.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from cassette.sim.clock import VirtualClock
 from cassette.sim.env import Env, Node
 from cassette.sim.events import (
@@ -13,6 +15,7 @@ from cassette.sim.events import (
     CrashNode,
     DeliverMessage,
     Event,
+    FaultTick,
     FireTimer,
     HealPartition,
     PauseNode,
@@ -84,6 +87,7 @@ class Simulation:
         self._down: set[NodeId] = set()
         self._paused_until: dict[NodeId, int] = {}
         self._skew: dict[NodeId, int] = {}
+        self.on_fault_tick: Callable[[], None] | None = None
 
     # -- wiring ---------------------------------------------------------
 
@@ -255,6 +259,9 @@ class Simulation:
                 self._pause(event.node, action.until_ms)
             case ResumeNode():
                 self._resume(event.node)
+            case FaultTick():
+                if self.on_fault_tick is not None:
+                    self.on_fault_tick()
 
     def _deliver(self, recipient: NodeId, action: DeliverMessage) -> None:
         node = self._nodes.get(recipient)

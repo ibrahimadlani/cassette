@@ -47,6 +47,11 @@ class ResumeNode:
 
 
 @dataclass(frozen=True, slots=True)
+class FaultTick:
+    """Wake the injector so it can roll its dice."""
+
+
+@dataclass(frozen=True, slots=True)
 class StartPartition:
     """Cut the cluster into groups that cannot see each other."""
 
@@ -65,6 +70,7 @@ Action: TypeAlias = (
     | RestartNode
     | PauseNode
     | ResumeNode
+    | FaultTick
     | StartPartition
     | HealPartition
 )
