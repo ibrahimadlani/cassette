@@ -83,6 +83,7 @@ class Simulation:
         self._timers: dict[tuple[NodeId, str], int] = {}
         self._down: set[NodeId] = set()
         self._paused_until: dict[NodeId, int] = {}
+        self._skew: dict[NodeId, int] = {}
 
     # -- wiring ---------------------------------------------------------
 
@@ -94,6 +95,8 @@ class Simulation:
             raise ValueError(f"node {node.node_id} is already registered")
         self._nodes[node.node_id] = node
         self._envs[node.node_id] = NodeEnv(node.node_id, self)
+        skew = self.config.clock_skew_ms
+        self._skew[node.node_id] = self.rng.randint(-skew, skew)
 
     def env_for(self, node_id: NodeId) -> Env:
         """The `Env` handed to a registered node."""
@@ -107,8 +110,17 @@ class Simulation:
     # -- services offered to nodes --------------------------------------
 
     def now_for(self, node_id: NodeId) -> int:
-        """The time `node_id` believes it is."""
-        return self.clock.now
+        """The time `node_id` believes it is.
+
+        Skew shifts what a node reads, never when it is scheduled. The queue
+        stays the single authority on ordering, which is what keeps skew from
+        turning into a second, hidden clock.
+        """
+        return max(0, self.clock.now + self._skew.get(node_id, 0))
+
+    def skew_of(self, node_id: NodeId) -> int:
+        """The offset drawn for this node when it was registered."""
+        return self._skew.get(node_id, 0)
 
     def send(self, sender: NodeId, recipient: NodeId, msg: Payload) -> None:
         """Route a message through the bus."""
