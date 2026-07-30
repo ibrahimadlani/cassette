@@ -24,7 +24,59 @@ class FireTimer:
     tag: str
 
 
-Action: TypeAlias = DeliverMessage | FireTimer
+@dataclass(frozen=True, slots=True)
+class CrashNode:
+    """Kill a node: volatile state is lost, durable state survives."""
+
+
+@dataclass(frozen=True, slots=True)
+class RestartNode:
+    """Bring a crashed node back up."""
+
+
+@dataclass(frozen=True, slots=True)
+class PauseNode:
+    """Freeze a node without killing it. Its state survives; its progress stops."""
+
+    until_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ResumeNode:
+    """Let a frozen node catch up on everything that queued behind it."""
+
+
+@dataclass(frozen=True, slots=True)
+class FaultTick:
+    """Wake the injector so it can roll its dice."""
+
+
+@dataclass(frozen=True, slots=True)
+class StartPartition:
+    """Cut the cluster into groups that cannot see each other."""
+
+    groups: tuple[frozenset[NodeId], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HealPartition:
+    """Put the cluster back together."""
+
+
+Action: TypeAlias = (
+    DeliverMessage
+    | FireTimer
+    | CrashNode
+    | RestartNode
+    | PauseNode
+    | ResumeNode
+    | FaultTick
+    | StartPartition
+    | HealPartition
+)
+
+CONTROL: NodeId = -1
+"""The pseudo-node that owns fault events. No participant may claim this id."""
 
 
 @dataclass(frozen=True, slots=True)

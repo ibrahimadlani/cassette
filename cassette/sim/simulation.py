@@ -6,10 +6,26 @@ a `NodeEnv` and nothing else.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from cassette.sim.clock import VirtualClock
 from cassette.sim.env import Env, Node
-from cassette.sim.events import DeliverMessage, Event, FireTimer
+from cassette.sim.events import (
+    CONTROL,
+    CrashNode,
+    DeliverMessage,
+    Event,
+    FaultTick,
+    FireTimer,
+    HealPartition,
+    PauseNode,
+    RestartNode,
+    ResumeNode,
+    StartPartition,
+)
+from cassette.sim.faults import FaultConfig
 from cassette.sim.network import Network
+from cassette.sim.observer import NullObserver, Observer
 from cassette.sim.rng import Rng
 from cassette.sim.scheduler import Scheduler
 from cassette.sim.types import NodeId, Payload
@@ -53,23 +69,38 @@ class NodeEnv:
 class Simulation:
     """A single deterministic run."""
 
-    def __init__(self, seed: int, latency_ms: tuple[int, int] = (1, 20)) -> None:
+    def __init__(
+        self,
+        seed: int,
+        config: FaultConfig | None = None,
+        observer: Observer | None = None,
+    ) -> None:
+        self.config = config or FaultConfig()
+        self.observer = observer or NullObserver()
         self.clock = VirtualClock()
         self.rng = Rng(seed)
         self.scheduler = Scheduler(self.clock)
-        self.network = Network(self.scheduler, self.rng, latency_ms)
+        self.network = Network(self.scheduler, self.rng, self.config, self.observer)
         self._nodes: dict[NodeId, Node] = {}
         self._envs: dict[NodeId, NodeEnv] = {}
         self._timers: dict[tuple[NodeId, str], int] = {}
+        self._down: set[NodeId] = set()
+        self._paused_until: dict[NodeId, int] = {}
+        self._skew: dict[NodeId, int] = {}
+        self.on_fault_tick: Callable[[], None] | None = None
 
     # -- wiring ---------------------------------------------------------
 
     def add_node(self, node: Node) -> None:
-        """Register a participant. Ids must be unique."""
+        """Register a participant. Ids must be unique and non-negative."""
+        if node.node_id == CONTROL:
+            raise ValueError(f"{CONTROL} is reserved for fault events")
         if node.node_id in self._nodes:
             raise ValueError(f"node {node.node_id} is already registered")
         self._nodes[node.node_id] = node
         self._envs[node.node_id] = NodeEnv(node.node_id, self)
+        skew = self.config.clock_skew_ms
+        self._skew[node.node_id] = self.rng.randint(-skew, skew)
 
     def env_for(self, node_id: NodeId) -> Env:
         """The `Env` handed to a registered node."""
@@ -83,8 +114,17 @@ class Simulation:
     # -- services offered to nodes --------------------------------------
 
     def now_for(self, node_id: NodeId) -> int:
-        """The time `node_id` believes it is."""
-        return self.clock.now
+        """The time `node_id` believes it is.
+
+        Skew shifts what a node reads, never when it is scheduled. The queue
+        stays the single authority on ordering, which is what keeps skew from
+        turning into a second, hidden clock.
+        """
+        return max(0, self.clock.now + self._skew.get(node_id, 0))
+
+    def skew_of(self, node_id: NodeId) -> int:
+        """The offset drawn for this node when it was registered."""
+        return self._skew.get(node_id, 0)
 
     def send(self, sender: NodeId, recipient: NodeId, msg: Payload) -> None:
         """Route a message through the bus."""
@@ -106,6 +146,69 @@ class Simulation:
         pending = self._timers.pop((node_id, tag), None)
         if pending is not None:
             self.scheduler.cancel(pending)
+
+    # -- faults ---------------------------------------------------------
+
+    def schedule_partition(self, groups: tuple[frozenset[NodeId], ...], duration_ms: int) -> None:
+        """Open a partition now and close it after `duration_ms`."""
+        self.scheduler.schedule(0, CONTROL, StartPartition(groups))
+        self.scheduler.schedule(duration_ms, CONTROL, HealPartition())
+
+    def schedule_crash(self, node_id: NodeId, downtime_ms: int) -> None:
+        """Kill a node now and bring it back after `downtime_ms`."""
+        self.scheduler.schedule(0, node_id, CrashNode())
+        self.scheduler.schedule(downtime_ms, node_id, RestartNode())
+
+    def schedule_pause(self, node_id: NodeId, duration_ms: int) -> None:
+        """Freeze a node for `duration_ms`, then let it catch up.
+
+        A pause is not a crash: nothing is lost, and nothing addressed to the
+        node is discarded. Work simply queues up and lands in a burst on the
+        far side, which is precisely the shape of a stop-the-world collection
+        and precisely what breaks lease- and timeout-based reasoning.
+        """
+        self.scheduler.schedule(0, node_id, PauseNode(self.clock.now + duration_ms))
+        self.scheduler.schedule(duration_ms, node_id, ResumeNode())
+
+    def is_down(self, node_id: NodeId) -> bool:
+        """Whether the node is currently crashed."""
+        return node_id in self._down
+
+    def is_paused(self, node_id: NodeId) -> bool:
+        """Whether the node is currently frozen."""
+        return node_id in self._paused_until
+
+    def _pause(self, node_id: NodeId, until_ms: int) -> None:
+        if node_id not in self._nodes or node_id in self._down:
+            return
+        self._paused_until[node_id] = max(self._paused_until.get(node_id, 0), until_ms)
+        self.observer.record("node_pause", node=node_id, until=until_ms)
+
+    def _resume(self, node_id: NodeId) -> None:
+        deadline = self._paused_until.get(node_id)
+        if deadline is None or deadline > self.clock.now:
+            return
+        del self._paused_until[node_id]
+        self.observer.record("node_resume", node=node_id)
+
+    def _crash(self, node_id: NodeId) -> None:
+        node = self._nodes.get(node_id)
+        if node is None or node_id in self._down:
+            return
+        self._down.add(node_id)
+        self._paused_until.pop(node_id, None)
+        for pending in sorted(key for key in self._timers if key[0] == node_id):
+            self.scheduler.cancel(self._timers.pop(pending))
+        node.on_crash()
+        self.observer.record("node_crash", node=node_id)
+
+    def _restart(self, node_id: NodeId) -> None:
+        node = self._nodes.get(node_id)
+        if node is None or node_id not in self._down:
+            return
+        self._down.discard(node_id)
+        node.on_restart(self._envs[node_id])
+        self.observer.record("node_restart", node=node_id)
 
     # -- the loop -------------------------------------------------------
 
@@ -139,15 +242,64 @@ class Simulation:
         return delivered
 
     def _dispatch(self, event: Event) -> None:
+        match event.action:
+            case DeliverMessage() as action:
+                self._deliver(event.node, action)
+            case FireTimer() as action:
+                self._fire_timer(event, action)
+            case StartPartition() as action:
+                self.network.partition_into(action.groups)
+            case HealPartition():
+                self.network.heal()
+            case CrashNode():
+                self._crash(event.node)
+            case RestartNode():
+                self._restart(event.node)
+            case PauseNode() as action:
+                self._pause(event.node, action.until_ms)
+            case ResumeNode():
+                self._resume(event.node)
+            case FaultTick():
+                if self.on_fault_tick is not None:
+                    self.on_fault_tick()
+
+    def _deliver(self, recipient: NodeId, action: DeliverMessage) -> None:
+        node = self._nodes.get(recipient)
+        if node is None:
+            return
+        if not self.network.can_reach(action.sender, recipient):
+            self.network.report_drop(action.sender, recipient, action.msg_id, "partition")
+            return
+        if recipient in self._down:
+            self.network.report_drop(action.sender, recipient, action.msg_id, "crashed")
+            return
+        resume_at = self._paused_until.get(recipient)
+        if resume_at is not None:
+            self.scheduler.schedule_at(resume_at, recipient, action)
+            return
+        self.observer.record(
+            "msg_deliver",
+            id=action.msg_id,
+            sender=action.sender,
+            to=recipient,
+            kind=action.msg.kind,
+        )
+        node.on_message(self._envs[recipient], action.sender, action.msg)
+
+    def _fire_timer(self, event: Event, action: FireTimer) -> None:
         node = self._nodes.get(event.node)
         if node is None:
             return
-        env = self._envs[event.node]
-        action = event.action
-        if isinstance(action, DeliverMessage):
-            node.on_message(env, action.sender, action.msg)
-        else:
-            if self._timers.get((event.node, action.tag)) != event.seq:
-                return
+        if self._timers.get((event.node, action.tag)) != event.seq:
+            return
+        if event.node in self._down:
             del self._timers[event.node, action.tag]
-            node.on_timer(env, action.tag)
+            return
+        resume_at = self._paused_until.get(event.node)
+        if resume_at is not None:
+            self._timers[event.node, action.tag] = self.scheduler.schedule_at(
+                resume_at, event.node, action
+            )
+            return
+        del self._timers[event.node, action.tag]
+        node.on_timer(self._envs[event.node], action.tag)
