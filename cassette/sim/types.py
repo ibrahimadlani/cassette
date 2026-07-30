@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Protocol, TypeAlias
 
 NodeId: TypeAlias = int
 """Identifier of a participant. Replicas take the low ids, clients the high ones."""
 
-JsonValue: TypeAlias = "str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None"
+JsonValue: TypeAlias = (
+    "str | int | float | bool | Sequence[JsonValue] | Mapping[str, JsonValue] | None"
+)
+"""Anything `json.dumps` will accept.
+
+Deliberately spelled with the covariant `Sequence` and `Mapping` rather than
+`list` and `dict`: a `list[int]` is not a `list[JsonValue]` under invariance,
+and every second call site would need a cast.
+"""
+
 JsonDict: TypeAlias = "dict[str, JsonValue]"
 
 

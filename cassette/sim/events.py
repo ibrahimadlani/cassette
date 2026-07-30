@@ -24,7 +24,22 @@ class FireTimer:
     tag: str
 
 
-Action: TypeAlias = DeliverMessage | FireTimer
+@dataclass(frozen=True, slots=True)
+class StartPartition:
+    """Cut the cluster into groups that cannot see each other."""
+
+    groups: tuple[frozenset[NodeId], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HealPartition:
+    """Put the cluster back together."""
+
+
+Action: TypeAlias = DeliverMessage | FireTimer | StartPartition | HealPartition
+
+CONTROL: NodeId = -1
+"""The pseudo-node that owns fault events. No participant may claim this id."""
 
 
 @dataclass(frozen=True, slots=True)

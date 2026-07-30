@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from cassette.sim.clock import VirtualClock
 from cassette.sim.env import Env, Node
-from cassette.sim.events import DeliverMessage, Event, FireTimer
+from cassette.sim.events import (
+    CONTROL,
+    DeliverMessage,
+    Event,
+    FireTimer,
+    HealPartition,
+    StartPartition,
+)
 from cassette.sim.faults import FaultConfig
 from cassette.sim.network import Network
 from cassette.sim.observer import NullObserver, Observer
@@ -74,7 +81,9 @@ class Simulation:
     # -- wiring ---------------------------------------------------------
 
     def add_node(self, node: Node) -> None:
-        """Register a participant. Ids must be unique."""
+        """Register a participant. Ids must be unique and non-negative."""
+        if node.node_id == CONTROL:
+            raise ValueError(f"{CONTROL} is reserved for fault events")
         if node.node_id in self._nodes:
             raise ValueError(f"node {node.node_id} is already registered")
         self._nodes[node.node_id] = node
@@ -116,6 +125,13 @@ class Simulation:
         if pending is not None:
             self.scheduler.cancel(pending)
 
+    # -- faults ---------------------------------------------------------
+
+    def schedule_partition(self, groups: tuple[frozenset[NodeId], ...], duration_ms: int) -> None:
+        """Open a partition now and close it after `duration_ms`."""
+        self.scheduler.schedule(0, CONTROL, StartPartition(groups))
+        self.scheduler.schedule(duration_ms, CONTROL, HealPartition())
+
     # -- the loop -------------------------------------------------------
 
     def step(self) -> bool:
@@ -148,15 +164,37 @@ class Simulation:
         return delivered
 
     def _dispatch(self, event: Event) -> None:
+        match event.action:
+            case DeliverMessage() as action:
+                self._deliver(event.node, action)
+            case FireTimer() as action:
+                self._fire_timer(event, action)
+            case StartPartition() as action:
+                self.network.partition_into(action.groups)
+            case HealPartition():
+                self.network.heal()
+
+    def _deliver(self, recipient: NodeId, action: DeliverMessage) -> None:
+        node = self._nodes.get(recipient)
+        if node is None:
+            return
+        if not self.network.can_reach(action.sender, recipient):
+            self.network.report_drop(action.sender, recipient, action.msg_id, "partition")
+            return
+        self.observer.record(
+            "msg_deliver",
+            id=action.msg_id,
+            sender=action.sender,
+            to=recipient,
+            kind=action.msg.kind,
+        )
+        node.on_message(self._envs[recipient], action.sender, action.msg)
+
+    def _fire_timer(self, event: Event, action: FireTimer) -> None:
         node = self._nodes.get(event.node)
         if node is None:
             return
-        env = self._envs[event.node]
-        action = event.action
-        if isinstance(action, DeliverMessage):
-            node.on_message(env, action.sender, action.msg)
-        else:
-            if self._timers.get((event.node, action.tag)) != event.seq:
-                return
-            del self._timers[event.node, action.tag]
-            node.on_timer(env, action.tag)
+        if self._timers.get((event.node, action.tag)) != event.seq:
+            return
+        del self._timers[event.node, action.tag]
+        node.on_timer(self._envs[event.node], action.tag)
