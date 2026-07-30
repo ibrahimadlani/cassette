@@ -9,7 +9,9 @@ from __future__ import annotations
 from cassette.sim.clock import VirtualClock
 from cassette.sim.env import Env, Node
 from cassette.sim.events import DeliverMessage, Event, FireTimer
+from cassette.sim.faults import FaultConfig
 from cassette.sim.network import Network
+from cassette.sim.observer import NullObserver, Observer
 from cassette.sim.rng import Rng
 from cassette.sim.scheduler import Scheduler
 from cassette.sim.types import NodeId, Payload
@@ -53,11 +55,18 @@ class NodeEnv:
 class Simulation:
     """A single deterministic run."""
 
-    def __init__(self, seed: int, latency_ms: tuple[int, int] = (1, 20)) -> None:
+    def __init__(
+        self,
+        seed: int,
+        config: FaultConfig | None = None,
+        observer: Observer | None = None,
+    ) -> None:
+        self.config = config or FaultConfig()
+        self.observer = observer or NullObserver()
         self.clock = VirtualClock()
         self.rng = Rng(seed)
         self.scheduler = Scheduler(self.clock)
-        self.network = Network(self.scheduler, self.rng, latency_ms)
+        self.network = Network(self.scheduler, self.rng, self.config, self.observer)
         self._nodes: dict[NodeId, Node] = {}
         self._envs: dict[NodeId, NodeEnv] = {}
         self._timers: dict[tuple[NodeId, str], int] = {}
