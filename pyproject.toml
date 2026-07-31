@@ -64,6 +64,7 @@ select = [
     "RET", # flake8-return
     "RUF", # ruff-specific
     "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
     "UP",  # pyupgrade
     "W",   # pycodestyle warnings
 ]
@@ -78,8 +79,26 @@ known-first-party = ["cassette", "tests"]
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# The determinism contract, as a lint rule. Banned everywhere by default and
+# lifted below for the layers that are allowed to touch the real world.
+# See docs/DETERMINISM.md and tests/test_determinism_guard.py.
+"asyncio".msg = "the simulation core is single-threaded on purpose"
+"datetime".msg = "use env.now()"
+"multiprocessing".msg = "the simulation core is single-threaded on purpose"
+"os".msg = "no I/O in the core; it arrives through Env"
+"pathlib".msg = "no I/O in the core; it arrives through Env"
+"random".msg = "use env.random(), which draws from the seeded source"
+"secrets".msg = "nothing in a simulation may be unpredictable"
+"socket".msg = "there is no real network here"
+"subprocess".msg = "no I/O in the core; it arrives through Env"
+"threading".msg = "the simulation core is single-threaded on purpose"
+"time".msg = "use env.now()"
+"uuid".msg = "identifiers are counters so that they replay"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D100", "D101", "D102", "D103", "D104"]
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "TID251"]
+"cassette/sim/rng.py" = ["TID251"]  # the one module allowed to wrap `random`
 
 [tool.mypy]
 python_version = "3.11"
