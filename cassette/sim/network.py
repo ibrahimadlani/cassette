@@ -37,8 +37,8 @@ class Network:
     ) -> None:
         self._scheduler = scheduler
         self._rng = rng
-        self._config = config or FaultConfig()
-        self._observer = observer or NullObserver()
+        self._config = FaultConfig() if config is None else config
+        self._observer = NullObserver() if observer is None else observer
         self._partition: PartitionGroups | None = None
         self._next_msg_id = 0
 

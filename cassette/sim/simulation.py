@@ -74,10 +74,11 @@ class Simulation:
         seed: int,
         config: FaultConfig | None = None,
         observer: Observer | None = None,
+        clock: VirtualClock | None = None,
     ) -> None:
-        self.config = config or FaultConfig()
-        self.observer = observer or NullObserver()
-        self.clock = VirtualClock()
+        self.config = FaultConfig() if config is None else config
+        self.observer = NullObserver() if observer is None else observer
+        self.clock = VirtualClock() if clock is None else clock
         self.rng = Rng(seed)
         self.scheduler = Scheduler(self.clock)
         self.network = Network(self.scheduler, self.rng, self.config, self.observer)
