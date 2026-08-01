@@ -4,12 +4,16 @@ How the pieces fit, and why they are arranged this way.
 
 ## The shape of a run
 
-```
-seed ──▶ Simulation ──▶ Trace ──▶ Checker ──▶ verdict
-             │                                   │
-             │                          (if violated)
-             ▼                                   ▼
-       FaultInjector                          Shrinker
+```mermaid
+flowchart LR
+    seed([seed]) --> sim[Simulation]
+    inj[FaultInjector] -->|partitions, crashes, pauses| sim
+    sim --> trace[(Trace)]
+    trace --> checker[Linearizability checker]
+    checker -->|linearizable| ok([pass])
+    checker -->|violation| shrink[Shrinker]
+    shrink -->|replay a smaller scenario| sim
+    shrink --> minimal([minimal counterexample])
 ```
 
 A run starts from an integer. The simulation turns it into an ordered sequence
