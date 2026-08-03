@@ -29,6 +29,9 @@ from cassette.kv.version import ABSENT, ZERO, Stored, Version
 from cassette.sim.env import Env
 from cassette.sim.types import NodeId, Payload
 
+READ_OP = "read"
+WRITE_OP = "write"
+
 READ_PHASE = "read"
 WRITE_PHASE = "write"
 
@@ -151,6 +154,9 @@ class Replica:
 
     def _on_read_quorum(self, env: Env, round_: Round) -> None:
         newest = round_.newest()
+        if round_.op == READ_OP:
+            self._finish(env, round_, ok=True, value=newest.value)
+            return
         round_.phase = WRITE_PHASE
         round_.version = newest.version.next_from(self.node_id)
         self._broadcast(env, WriteRequest(round_.req, round_.key, round_.value, round_.version))
