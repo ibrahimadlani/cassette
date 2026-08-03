@@ -12,11 +12,58 @@ store that looks correct until a node reboots.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from cassette.kv.config import StoreConfig
-from cassette.kv.messages import Key, ReadReply, ReadRequest, WriteAck, WriteRequest
-from cassette.kv.version import ABSENT, Stored
+from cassette.kv.messages import (
+    ClientReply,
+    ClientRequest,
+    Key,
+    ReadReply,
+    ReadRequest,
+    Value,
+    WriteAck,
+    WriteRequest,
+)
+from cassette.kv.version import ABSENT, ZERO, Stored, Version
 from cassette.sim.env import Env
 from cassette.sim.types import NodeId, Payload
+
+READ_PHASE = "read"
+WRITE_PHASE = "write"
+
+
+def timer_tag(req: int) -> str:
+    """The timer a coordinator arms while a round is outstanding."""
+    return f"round:{req}"
+
+
+@dataclass
+class Round:
+    """A client request this replica is coordinating. Volatile by design."""
+
+    req: int
+    client: NodeId
+    op: str
+    key: Key
+    value: Value = None
+    expected: Value = None
+    phase: str = READ_PHASE
+    version: Version = ZERO
+    replies: dict[NodeId, Stored] = field(default_factory=dict)
+    acks: set[NodeId] = field(default_factory=set)
+
+    def newest(self) -> Stored:
+        """The most recent value any replica reported in phase one.
+
+        Sorted by node id before taking the maximum, so the answer never
+        depends on the order the replies happened to arrive in.
+        """
+        return max(
+            (held for _, held in sorted(self.replies.items())),
+            key=lambda held: held.version,
+            default=ABSENT,
+        )
 
 
 class Replica:
@@ -26,6 +73,7 @@ class Replica:
         self.node_id = node_id
         self.config = StoreConfig() if config is None else config
         self._store: dict[Key, Stored] = {}
+        self._rounds: dict[int, Round] = {}
 
     # -- inspection -----------------------------------------------------
 
@@ -38,17 +86,30 @@ class Replica:
         """Every key this replica knows about, sorted."""
         return sorted(self._store)
 
-    # -- the storage role -----------------------------------------------
+    @property
+    def open_rounds(self) -> int:
+        """How many client requests this replica is still coordinating."""
+        return len(self._rounds)
+
+    # -- routing --------------------------------------------------------
 
     def on_message(self, env: Env, sender: NodeId, msg: Payload) -> None:
         """Route an incoming message to its handler."""
         match msg:
+            case ClientRequest():
+                self._on_client_request(env, sender, msg)
             case ReadRequest():
                 self._on_read_request(env, sender, msg)
             case WriteRequest():
                 self._on_write_request(env, sender, msg)
+            case ReadReply():
+                self._on_read_reply(env, sender, msg)
+            case WriteAck():
+                self._on_write_ack(env, sender, msg)
             case _:
                 return
+
+    # -- the storage role -----------------------------------------------
 
     def _on_read_request(self, env: Env, sender: NodeId, msg: ReadRequest) -> None:
         held = self.stored(msg.key)
@@ -63,16 +124,79 @@ class Replica:
         # coordinator that has done nothing wrong.
         env.send(sender, WriteAck(msg.req, msg.key, msg.version))
 
+    # -- the coordinator role -------------------------------------------
+
+    def _on_client_request(self, env: Env, client: NodeId, msg: ClientRequest) -> None:
+        if msg.req in self._rounds:
+            return
+        self._rounds[msg.req] = Round(
+            req=msg.req,
+            client=client,
+            op=msg.op,
+            key=msg.key,
+            value=msg.value,
+            expected=msg.expected,
+        )
+        self._broadcast(env, ReadRequest(msg.req, msg.key))
+        env.set_timer(self.config.request_timeout_ms, timer_tag(msg.req))
+
+    def _on_read_reply(self, env: Env, sender: NodeId, msg: ReadReply) -> None:
+        round_ = self._rounds.get(msg.req)
+        if round_ is None or round_.phase != READ_PHASE or round_.key != msg.key:
+            return
+        round_.replies[sender] = Stored(msg.value, msg.version)
+        if len(round_.replies) < self.config.read_quorum:
+            return
+        self._on_read_quorum(env, round_)
+
+    def _on_read_quorum(self, env: Env, round_: Round) -> None:
+        newest = round_.newest()
+        round_.phase = WRITE_PHASE
+        round_.version = newest.version.next_from(self.node_id)
+        self._broadcast(env, WriteRequest(round_.req, round_.key, round_.value, round_.version))
+        # Phase two gets its own budget. A round that spent almost all of the
+        # timeout gathering reads would otherwise abandon the write it has
+        # already started, and abandoning a write is the worst outcome
+        # available: the client is told nothing while replicas keep applying it.
+        env.set_timer(self.config.request_timeout_ms, timer_tag(round_.req))
+
+    def _on_write_ack(self, env: Env, sender: NodeId, msg: WriteAck) -> None:
+        round_ = self._rounds.get(msg.req)
+        if round_ is None or round_.phase != WRITE_PHASE or round_.version != msg.version:
+            return
+        round_.acks.add(sender)
+        if len(round_.acks) < self.config.write_quorum:
+            return
+        self._finish(env, round_, ok=True)
+
+    def _finish(self, env: Env, round_: Round, *, ok: bool, value: Value = None) -> None:
+        del self._rounds[round_.req]
+        env.cancel_timer(timer_tag(round_.req))
+        env.send(round_.client, ClientReply(round_.req, ok, value))
+
+    def _broadcast(self, env: Env, msg: Payload) -> None:
+        for peer in self.config.replica_ids:
+            env.send(peer, msg)
+
     # -- lifecycle ------------------------------------------------------
 
     def on_timer(self, env: Env, tag: str) -> None:
-        """No timers yet; the coordinator role adds them."""
-        return
+        """Give up on a round that never reached its quorum.
+
+        The client is told the request failed, which is weaker than it sounds:
+        a write that could not gather W acknowledgements may still have reached
+        some replicas, and may still surface later. The history records the
+        outcome as unknown for exactly that reason.
+        """
+        _, _, raw = tag.partition(":")
+        round_ = self._rounds.get(int(raw))
+        if round_ is not None:
+            self._finish(env, round_, ok=False)
 
     def on_crash(self) -> None:
         """Lose everything volatile. `_store` is what a real node would have on disk."""
-        return
+        self._rounds.clear()
 
     def on_restart(self, env: Env) -> None:
-        """Come back up with the durable store intact."""
+        """Come back up with the durable store intact and no memory of any round."""
         return
