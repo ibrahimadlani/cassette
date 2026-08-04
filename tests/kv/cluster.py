@@ -53,11 +53,18 @@ class Cluster:
         self.sim.add_node(self.mailbox)
         self._next_req = 0
 
-    def request(self, op: str, key: Key, value: Value = None, coordinator: NodeId = 0) -> int:
+    def request(
+        self,
+        op: str,
+        key: Key,
+        value: Value = None,
+        coordinator: NodeId = 0,
+        expected: Value = None,
+    ) -> int:
         """Send one client request and return its id."""
         self._next_req += 1
         self.sim.env_for(self.client_id).send(
-            coordinator, ClientRequest(self._next_req, op, key, value)
+            coordinator, ClientRequest(self._next_req, op, key, value, expected)
         )
         return self._next_req
 
@@ -68,6 +75,10 @@ class Cluster:
     def read(self, key: Key, coordinator: NodeId = 0) -> ClientReply:
         """Read and run until the coordinator answers."""
         return self._settle(self.request("read", key, coordinator=coordinator))
+
+    def cas(self, key: Key, expected: Value, new: int, coordinator: NodeId = 0) -> ClientReply:
+        """Compare-and-swap, run until the coordinator answers."""
+        return self._settle(self.request("cas", key, new, coordinator, expected))
 
     def _settle(self, req: int) -> ClientReply:
         self.sim.run()

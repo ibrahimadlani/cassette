@@ -31,6 +31,11 @@ from cassette.sim.types import NodeId, Payload
 
 READ_OP = "read"
 WRITE_OP = "write"
+CAS_OP = "cas"
+
+SWAPPED = 1
+NOT_SWAPPED = 0
+"""What a compare-and-swap reports back through ClientReply.value."""
 
 READ_PHASE = "read"
 WRITE_PHASE = "write"
@@ -157,6 +162,9 @@ class Replica:
         if round_.op == READ_OP:
             self._finish(env, round_, ok=True, value=newest.value)
             return
+        if round_.op == CAS_OP and newest.value != round_.expected:
+            self._finish(env, round_, ok=True, value=NOT_SWAPPED)
+            return
         round_.phase = WRITE_PHASE
         round_.version = newest.version.next_from(self.node_id)
         self._broadcast(env, WriteRequest(round_.req, round_.key, round_.value, round_.version))
@@ -173,7 +181,7 @@ class Replica:
         round_.acks.add(sender)
         if len(round_.acks) < self.config.write_quorum:
             return
-        self._finish(env, round_, ok=True)
+        self._finish(env, round_, ok=True, value=SWAPPED if round_.op == CAS_OP else None)
 
     def _finish(self, env: Env, round_: Round, *, ok: bool, value: Value = None) -> None:
         del self._rounds[round_.req]
