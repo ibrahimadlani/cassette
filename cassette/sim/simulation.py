@@ -225,8 +225,18 @@ class Simulation:
         self._dispatch(event)
         return True
 
-    def run(self, *, until_ms: int | None = None, max_events: int | None = None) -> int:
+    def run(
+        self,
+        *,
+        until_ms: int | None = None,
+        max_events: int | None = None,
+        stop_when: Callable[[], bool] | None = None,
+    ) -> int:
         """Drain the queue, optionally stopping early.
+
+        `stop_when` is checked after every event. The fault injector never runs
+        out of work, so without it a run would always burn its whole horizon
+        even once the clients had nothing left to do.
 
         Returns:
             The number of events delivered.
@@ -240,6 +250,8 @@ class Simulation:
             if not self.step():
                 break
             delivered += 1
+            if stop_when is not None and stop_when():
+                break
         return delivered
 
     def _dispatch(self, event: Event) -> None:

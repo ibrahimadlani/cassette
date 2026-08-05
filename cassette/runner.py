@@ -64,7 +64,10 @@ def execute(scenario: Scenario, *, record: bool = True) -> Run:
     for client in clients:
         client.start(sim.env_for(client.node_id))
 
-    delivered = sim.run(until_ms=scenario.horizon_ms)
+    delivered = sim.run(
+        until_ms=scenario.horizon_ms,
+        stop_when=lambda: all(client.finished for client in clients),
+    )
 
     return Run(
         scenario=scenario,
