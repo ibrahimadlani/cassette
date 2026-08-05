@@ -1,4 +1,4 @@
-.PHONY: help install lint format types test clean
+.PHONY: help install lint format types test run clean
 
 PYTHON ?= python3
 VENV   := .venv
@@ -26,6 +26,9 @@ types: ## run mypy in strict mode
 
 test: ## run the test suite with coverage
 	$(BIN)/pytest --cov --cov-report=term-missing
+
+run: ## run one simulation (make run SEED=8421)
+	$(BIN)/cassette run --seed $(or $(SEED),8421)
 
 clean: ## remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist
