@@ -99,6 +99,7 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D100", "D101", "D102", "D103", "D104", "TID251"]
 "cassette/sim/rng.py" = ["TID251"]  # the one module allowed to wrap `random`
+"cassette/cli/*" = ["TID251"]        # the layer whose job is touching the outside world
 
 [tool.mypy]
 python_version = "3.11"

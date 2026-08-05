@@ -26,6 +26,39 @@ from cassette.sim.types import JsonDict, JsonValue, NodeId
 
 DEFAULT_KEYS = ("x", "y")
 
+QUIET = FaultConfig(latency_ms=(1, 20))
+"""Jitter and reordering, nothing else. The baseline a store must survive."""
+
+STANDARD = FaultConfig(
+    latency_ms=(1, 40),
+    drop_rate=0.02,
+    dup_rate=0.01,
+    partition_rate=0.04,
+    partition_duration_ms=(200, 900),
+    crash_rate=0.02,
+    crash_duration_ms=(100, 600),
+    pause_rate=0.02,
+    pause_duration_ms=(50, 400),
+    clock_skew_ms=50,
+)
+"""A bad afternoon in a real data centre."""
+
+HARSH = FaultConfig(
+    latency_ms=(1, 120),
+    drop_rate=0.10,
+    dup_rate=0.05,
+    partition_rate=0.15,
+    partition_duration_ms=(300, 1_500),
+    crash_rate=0.08,
+    crash_duration_ms=(100, 900),
+    pause_rate=0.08,
+    pause_duration_ms=(100, 800),
+    clock_skew_ms=200,
+)
+"""Everything at once. Good for finding bugs, poor for reading the trace."""
+
+PRESETS = {"quiet": QUIET, "standard": STANDARD, "harsh": HARSH}
+
 
 @dataclass(frozen=True, slots=True)
 class WorkloadSpec:
