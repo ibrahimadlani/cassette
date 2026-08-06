@@ -88,6 +88,18 @@ def _report(run: Run) -> None:
     table.add_row("history", f"{completed} completed, {unknown} unknown")
 
     console.print(table)
+    console.print()
+    console.print(_verdict_line(run))
+
+
+def _verdict_line(run: Run) -> str:
+    if run.verdict is None:
+        return "[dim]not checked[/dim]"
+    if run.verdict.exhausted:
+        return f"[yellow]? {run.verdict}[/yellow]"
+    if run.verdict.linearizable:
+        return f"[green]OK[/green]  {run.verdict}"
+    return f"[bold red]VIOLATION[/bold red]  {run.verdict.explanation}"
 
 
 if __name__ == "__main__":  # pragma: no cover
