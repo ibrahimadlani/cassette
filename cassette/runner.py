@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cassette.checker.history import History
+from cassette.checker.linear import DEFAULT_BUDGET, Verdict, check
 from cassette.kv.client import Client
 from cassette.kv.replica import Replica
 from cassette.scenario import Scenario
@@ -31,18 +32,31 @@ class Run:
     events: list[JsonDict]
     delivered: int
     elapsed_ms: int
+    verdict: Verdict | None = None
+
+    @property
+    def violated(self) -> bool:
+        """Whether the checker found a genuine counterexample."""
+        return self.verdict is not None and self.verdict.violated
 
     def to_trace(self) -> Trace:
         """Package the run for storage or for the replayer."""
-        return trace_of(self.scenario, self.events, self.history)
+        trace = trace_of(self.scenario, self.events, self.history)
+        return trace if self.verdict is None else trace.with_verdict(self.verdict.to_json())
 
 
-def execute(scenario: Scenario, *, record: bool = True) -> Run:
-    """Run `scenario` to its horizon.
+def execute(
+    scenario: Scenario,
+    *,
+    record: bool = True,
+    judge: bool = True,
+    budget: int = DEFAULT_BUDGET,
+) -> Run:
+    """Run `scenario` to its horizon and, by default, check what came out.
 
     Recording is optional because the fuzzer does not want it: exploring
-    thousands of seeds, the only thing that matters is the history, and the
-    event log is an order of magnitude more data than the verdict needs.
+    thousands of seeds, the only thing that matters is the verdict, and the
+    event log is an order of magnitude more data than that needs.
     """
     clock = VirtualClock()
     recorder = Recorder(clock) if record else None
@@ -58,7 +72,7 @@ def execute(scenario: Scenario, *, record: bool = True) -> Run:
         for node_id, plan in zip(scenario.client_ids, scenario.plans, strict=True)
     ]
     for client in clients:
-        sim.add_node(client)
+        sim.add_node(client, skewed=False)
 
     FaultInjector(sim, list(scenario.store.replica_ids)).start()
     for client in clients:
@@ -75,4 +89,5 @@ def execute(scenario: Scenario, *, record: bool = True) -> Run:
         events=list(recorder.events) if recorder is not None else [],
         delivered=delivered,
         elapsed_ms=sim.clock.now,
+        verdict=check(history, budget) if judge else None,
     )

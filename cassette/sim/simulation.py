@@ -92,8 +92,18 @@ class Simulation:
 
     # -- wiring ---------------------------------------------------------
 
-    def add_node(self, node: Node) -> None:
-        """Register a participant. Ids must be unique and non-negative."""
+    def add_node(self, node: Node, *, skewed: bool = True) -> None:
+        """Register a participant. Ids must be unique and non-negative.
+
+        `skewed=False` exempts a node from clock drift. Clients are registered
+        that way: drift is a property of the system under test, and the
+        observer's clock is what "real time" means when judging a history.
+        Stamping observations with a drifting clock produces violations that
+        are artefacts of the measurement rather than of the system.
+
+        The offset is drawn either way, so exempting a node does not shift
+        every decision taken after it.
+        """
         if node.node_id == CONTROL:
             raise ValueError(f"{CONTROL} is reserved for fault events")
         if node.node_id in self._nodes:
@@ -101,7 +111,8 @@ class Simulation:
         self._nodes[node.node_id] = node
         self._envs[node.node_id] = NodeEnv(node.node_id, self)
         skew = self.config.clock_skew_ms
-        self._skew[node.node_id] = self.rng.randint(-skew, skew)
+        drawn = self.rng.randint(-skew, skew)
+        self._skew[node.node_id] = drawn if skewed else 0
 
     def env_for(self, node_id: NodeId) -> Env:
         """The `Env` handed to a registered node."""

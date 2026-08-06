@@ -82,8 +82,15 @@ def test_the_current_version_is_one() -> None:
     assert TRACE_VERSION == 1
 
 
-def test_a_verdict_can_be_attached_after_the_fact(validator: Draft202012Validator) -> None:
+def test_a_run_carries_its_verdict_into_the_trace(validator: Draft202012Validator) -> None:
     trace = execute(generate(8421)).to_trace()
+    assert trace.verdict is not None
+    assert trace.verdict["linearizable"] is True
+    validator.validate(trace.to_json())
+
+
+def test_a_verdict_can_be_attached_after_the_fact(validator: Draft202012Validator) -> None:
+    trace = execute(generate(8421), judge=False).to_trace()
     assert trace.verdict is None
     judged = trace.with_verdict({"linearizable": True, "checked_operations": len(trace.history)})
     validator.validate(judged.to_json())
