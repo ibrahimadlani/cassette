@@ -2,6 +2,11 @@
 
 Deterministic simulation testing for distributed systems — every bug reproduces, every time.
 
+[![CI](https://github.com/ibrahimadlani/cassette/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahimadlani/cassette/actions/workflows/ci.yml)
+[![Fuzz](https://github.com/ibrahimadlani/cassette/actions/workflows/fuzz.yml/badge.svg)](https://github.com/ibrahimadlani/cassette/actions/workflows/fuzz.yml)
+[![codecov](https://codecov.io/gh/ibrahimadlani/cassette/branch/main/graph/badge.svg)](https://codecov.io/gh/ibrahimadlani/cassette)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > Work in progress. The simulator, the replicated store and the linearizability
 > checker are done, and the fuzzer has started finding real bugs in the store.
 > The shrinker and the web replayer are next. See the [roadmap](#roadmap).

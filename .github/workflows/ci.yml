@@ -11,14 +11,18 @@ concurrency:
 
 jobs:
   quality:
-    name: lint, types and tests
+    name: py${{ matrix.python }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           cache: pip
 
       - name: Install
@@ -33,7 +37,14 @@ jobs:
         run: mypy
 
       - name: Test
-        run: pytest --cov --cov-report=term-missing --cov-fail-under=85
+        run: pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+
+      - name: Upload coverage
+        if: matrix.python == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
   hashseed:
     name: randomised PYTHONHASHSEED
