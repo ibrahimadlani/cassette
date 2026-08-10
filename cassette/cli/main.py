@@ -13,6 +13,7 @@ from rich.table import Table
 from cassette import __version__
 from cassette.cli.fuzzing import fuzz_command, regress_command
 from cassette.cli.options import build_scenario, describe_faults, scenario_options
+from cassette.cli.shrinking import shrink_command
 from cassette.runner import Run, execute
 
 console = Console()
@@ -30,6 +31,7 @@ def main() -> None:
 
 main.add_command(fuzz_command)
 main.add_command(regress_command)
+main.add_command(shrink_command)
 
 
 @main.command("run")

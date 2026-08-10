@@ -1,4 +1,4 @@
-.PHONY: help install lint format types test run fuzz regress clean
+.PHONY: help install lint format types test run fuzz shrink regress clean
 
 PYTHON ?= python3
 VENV   := .venv
@@ -32,6 +32,9 @@ run: ## run one simulation (make run SEED=8421)
 
 fuzz: ## explore seeds looking for a violation (make fuzz SEEDS=10000)
 	$(BIN)/cassette fuzz --seeds $(or $(SEEDS),2000) --workers 8 --all
+
+shrink: ## reduce a failing seed to a minimal scenario (make shrink SEED=6)
+	$(BIN)/cassette shrink --seed $(or $(SEED),6)
 
 regress: ## replay every seed in the regression corpus
 	$(BIN)/cassette regress
