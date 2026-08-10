@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from cassette.checker.history import CAS, READ, WRITE
 from cassette.kv.client import PlannedOp
 from cassette.kv.config import StoreConfig
-from cassette.sim.faults import FaultConfig
+from cassette.sim.faults import FaultConfig, InjectedFault
 from cassette.sim.rng import Rng
 from cassette.sim.types import JsonDict, JsonValue, NodeId
 
@@ -127,6 +127,10 @@ class Scenario:
     faults: FaultConfig = field(default_factory=FaultConfig)
     plans: tuple[tuple[PlannedOp, ...], ...] = ()
     horizon_ms: int = 60_000
+    schedule: tuple[InjectedFault, ...] | None = None
+    """When set, the faults are replayed from this list and the injector never
+    runs. `None` means "let the adversary decide from the seed", which is how a
+    scenario starts life."""
 
     @property
     def client_ids(self) -> tuple[NodeId, ...]:
@@ -138,6 +142,11 @@ class Scenario:
         """How many client operations this scenario plans in total."""
         return sum(len(plan) for plan in self.plans)
 
+    @property
+    def fault_count(self) -> int:
+        """How many faults the schedule injects, or -1 when it is still implicit."""
+        return -1 if self.schedule is None else len(self.schedule)
+
     def to_json(self) -> JsonDict:
         """Render for the trace envelope."""
         return {
@@ -146,6 +155,9 @@ class Scenario:
             "faults": self.faults.to_json(),
             "plans": [[op.to_json() for op in plan] for plan in self.plans],
             "horizon_ms": self.horizon_ms,
+            "schedule": None
+            if self.schedule is None
+            else [fault.to_json() for fault in self.schedule],
         }
 
     @classmethod
@@ -160,6 +172,11 @@ class Scenario:
                 tuple(PlannedOp.from_json(_as_dict(op)) for op in _as_list(plan)) for plan in plans
             ),
             horizon_ms=int(str(data["horizon_ms"])),
+            schedule=None
+            if data.get("schedule") is None
+            else tuple(
+                InjectedFault.from_json(_as_dict(fault)) for fault in _as_list(data["schedule"])
+            ),
         )
 
 

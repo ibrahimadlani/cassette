@@ -7,7 +7,7 @@ traces; everything below it deals in events.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from cassette.checker.history import History
 from cassette.checker.linear import DEFAULT_BUDGET, Verdict, check
@@ -15,7 +15,8 @@ from cassette.kv.client import Client
 from cassette.kv.replica import Replica
 from cassette.scenario import Scenario
 from cassette.sim.clock import VirtualClock
-from cassette.sim.injector import FaultInjector
+from cassette.sim.faults import InjectedFault
+from cassette.sim.injector import FaultInjector, ScriptedInjector
 from cassette.sim.observer import NullObserver, Observer
 from cassette.sim.recorder import Recorder
 from cassette.sim.simulation import Simulation
@@ -33,11 +34,21 @@ class Run:
     delivered: int
     elapsed_ms: int
     verdict: Verdict | None = None
+    schedule: tuple[InjectedFault, ...] = ()
+    """What the adversary actually did, whether it decided or was told."""
 
     @property
     def violated(self) -> bool:
         """Whether the checker found a genuine counterexample."""
         return self.verdict is not None and self.verdict.violated
+
+    def pinned(self) -> Scenario:
+        """The same scenario with the fault schedule made explicit.
+
+        From here the run no longer needs the adversary, which is the
+        precondition for reducing it.
+        """
+        return replace(self.scenario, schedule=self.schedule)
 
     def to_trace(self) -> Trace:
         """Package the run for storage or for the replayer."""
@@ -74,7 +85,14 @@ def execute(
     for client in clients:
         sim.add_node(client, skewed=False)
 
-    FaultInjector(sim, list(scenario.store.replica_ids)).start()
+    replicas = list(scenario.store.replica_ids)
+    injector: FaultInjector | None = None
+    if scenario.schedule is None:
+        injector = FaultInjector(sim, replicas)
+        injector.start()
+    else:
+        ScriptedInjector(sim, replicas, scenario.schedule).start()
+
     for client in clients:
         client.start(sim.env_for(client.node_id))
 
@@ -90,4 +108,5 @@ def execute(
         delivered=delivered,
         elapsed_ms=sim.clock.now,
         verdict=check(history, budget) if judge else None,
+        schedule=injector.schedule if injector is not None else (scenario.schedule or ()),
     )
