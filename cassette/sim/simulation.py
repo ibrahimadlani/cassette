@@ -161,17 +161,26 @@ class Simulation:
 
     # -- faults ---------------------------------------------------------
 
-    def schedule_partition(self, groups: tuple[frozenset[NodeId], ...], duration_ms: int) -> None:
-        """Open a partition now and close it after `duration_ms`."""
-        self.scheduler.schedule(0, CONTROL, StartPartition(groups))
-        self.scheduler.schedule(duration_ms, CONTROL, HealPartition())
+    def schedule_partition(
+        self, groups: tuple[frozenset[NodeId], ...], duration_ms: int, at_ms: int | None = None
+    ) -> None:
+        """Open a partition and close it `duration_ms` later.
 
-    def schedule_crash(self, node_id: NodeId, downtime_ms: int) -> None:
-        """Kill a node now and bring it back after `downtime_ms`."""
-        self.scheduler.schedule(0, node_id, CrashNode())
-        self.scheduler.schedule(downtime_ms, node_id, RestartNode())
+        `at_ms` is an absolute timestamp; without it the partition opens now.
+        Scripted replay needs the absolute form, because a captured schedule
+        records when each fault happened, not how long after the last one.
+        """
+        start = self.clock.now if at_ms is None else at_ms
+        self.scheduler.schedule_at(start, CONTROL, StartPartition(groups))
+        self.scheduler.schedule_at(start + duration_ms, CONTROL, HealPartition())
 
-    def schedule_pause(self, node_id: NodeId, duration_ms: int) -> None:
+    def schedule_crash(self, node_id: NodeId, downtime_ms: int, at_ms: int | None = None) -> None:
+        """Kill a node and bring it back `downtime_ms` later."""
+        start = self.clock.now if at_ms is None else at_ms
+        self.scheduler.schedule_at(start, node_id, CrashNode())
+        self.scheduler.schedule_at(start + downtime_ms, node_id, RestartNode())
+
+    def schedule_pause(self, node_id: NodeId, duration_ms: int, at_ms: int | None = None) -> None:
         """Freeze a node for `duration_ms`, then let it catch up.
 
         A pause is not a crash: nothing is lost, and nothing addressed to the
@@ -179,8 +188,9 @@ class Simulation:
         far side, which is precisely the shape of a stop-the-world collection
         and precisely what breaks lease- and timeout-based reasoning.
         """
-        self.scheduler.schedule(0, node_id, PauseNode(self.clock.now + duration_ms))
-        self.scheduler.schedule(duration_ms, node_id, ResumeNode())
+        start = self.clock.now if at_ms is None else at_ms
+        self.scheduler.schedule_at(start, node_id, PauseNode(start + duration_ms))
+        self.scheduler.schedule_at(start + duration_ms, node_id, ResumeNode())
 
     def is_down(self, node_id: NodeId) -> bool:
         """Whether the node is currently crashed."""

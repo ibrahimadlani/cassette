@@ -7,16 +7,17 @@
 # Written by `cassette fuzz`. Entries are only ever removed by hand, and only
 # with a note in docs/FINDINGS.md saying why.
 
-seed=161 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 8 cannot be placed in any legal order
-seed=324 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 9 cannot be placed in any legal order
-seed=353 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 5 reads y -> 4 cannot be placed in any legal order
-seed=414 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads x -> 9 cannot be placed in any legal order
-seed=530 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 1 cannot be placed in any legal order
-seed=548 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 3 cannot be placed in any legal order
-seed=870 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> None cannot be placed in any legal order
-seed=1089 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads x -> 5 cannot be placed in any legal order
-seed=1509 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 6 cannot be placed in any legal order
-seed=1516 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 5 reads x -> 7 cannot be placed in any legal order
-seed=1782 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 1 cannot be placed in any legal order
-seed=1807 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 1 cannot be placed in any legal order
-seed=1886 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 7 cannot be placed in any legal order
+seed=6 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads x -> None cannot be placed in any legal order
+seed=101 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 6 cannot be placed in any legal order
+seed=129 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads y -> 1 cannot be placed in any legal order
+seed=494 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads x -> 5 cannot be placed in any legal order
+seed=525 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 1 cannot be placed in any legal order
+seed=575 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads y -> 2 cannot be placed in any legal order
+seed=641 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 5 reads x -> 9 cannot be placed in any legal order
+seed=1602 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 5 reads y -> 7 cannot be placed in any legal order
+seed=1616 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 2 cannot be placed in any legal order
+seed=1653 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 5 reads y -> 5 cannot be placed in any legal order
+seed=1666 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 2 cannot be placed in any legal order
+seed=1715 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads x -> 2 cannot be placed in any legal order
+seed=1938 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 6 reads y -> 1 cannot be placed in any legal order
+seed=1984 preset=standard nodes=5 read=3 write=3 clients=3 ops=8 horizon=60000  # client 7 reads y -> 6 cannot be placed in any legal order

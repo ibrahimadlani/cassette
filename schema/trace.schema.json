@@ -4,7 +4,13 @@
   "title": "Cassette trace",
   "description": "One recorded simulation run: the scenario that produced it, every event in order, the client history, and the verdict. A replayer needs nothing else.",
   "type": "object",
-  "required": ["version", "seed", "scenario", "events", "history"],
+  "required": [
+    "version",
+    "seed",
+    "scenario",
+    "events",
+    "history"
+  ],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -15,67 +21,148 @@
       "description": "The integer the whole run came from.",
       "type": "integer"
     },
-    "scenario": { "$ref": "#/$defs/scenario" },
+    "scenario": {
+      "$ref": "#/$defs/scenario"
+    },
     "events": {
       "description": "Everything the simulator reported, in delivery order.",
       "type": "array",
-      "items": { "$ref": "#/$defs/event" }
+      "items": {
+        "$ref": "#/$defs/event"
+      }
     },
     "history": {
       "description": "What the clients saw. The only input the checker gets.",
       "type": "array",
-      "items": { "$ref": "#/$defs/operation" }
+      "items": {
+        "$ref": "#/$defs/operation"
+      }
     },
     "verdict": {
-      "oneOf": [{ "$ref": "#/$defs/verdict" }, { "type": "null" }]
+      "oneOf": [
+        {
+          "$ref": "#/$defs/verdict"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "$defs": {
     "millisecondRange": {
       "type": "array",
-      "items": { "type": "integer", "minimum": 0 },
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
       "minItems": 2,
       "maxItems": 2
     },
-    "probability": { "type": "number", "minimum": 0, "maximum": 1 },
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "value": {
       "description": "A stored value. null means the key is absent.",
-      "type": ["integer", "null"]
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "scenario": {
       "type": "object",
-      "required": ["seed", "store", "faults", "plans", "horizon_ms"],
+      "required": [
+        "seed",
+        "store",
+        "faults",
+        "plans",
+        "horizon_ms",
+        "schedule"
+      ],
       "additionalProperties": false,
       "properties": {
-        "seed": { "type": "integer" },
-        "horizon_ms": { "type": "integer", "minimum": 0 },
+        "seed": {
+          "type": "integer"
+        },
+        "horizon_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
         "store": {
           "type": "object",
-          "required": ["replicas", "read_quorum", "write_quorum", "request_timeout_ms"],
+          "required": [
+            "replicas",
+            "read_quorum",
+            "write_quorum",
+            "request_timeout_ms"
+          ],
           "additionalProperties": false,
           "properties": {
-            "replicas": { "type": "integer", "minimum": 1 },
-            "read_quorum": { "type": "integer", "minimum": 1 },
-            "write_quorum": { "type": "integer", "minimum": 1 },
-            "request_timeout_ms": { "type": "integer", "minimum": 1 }
+            "replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "read_quorum": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "write_quorum": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "request_timeout_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
         "faults": {
           "type": "object",
-          "required": ["latency_ms", "drop_rate", "dup_rate", "tick_ms"],
+          "required": [
+            "latency_ms",
+            "drop_rate",
+            "dup_rate",
+            "tick_ms"
+          ],
           "additionalProperties": false,
           "properties": {
-            "latency_ms": { "$ref": "#/$defs/millisecondRange" },
-            "drop_rate": { "$ref": "#/$defs/probability" },
-            "dup_rate": { "$ref": "#/$defs/probability" },
-            "partition_rate": { "$ref": "#/$defs/probability" },
-            "partition_duration_ms": { "$ref": "#/$defs/millisecondRange" },
-            "crash_rate": { "$ref": "#/$defs/probability" },
-            "crash_duration_ms": { "$ref": "#/$defs/millisecondRange" },
-            "pause_rate": { "$ref": "#/$defs/probability" },
-            "pause_duration_ms": { "$ref": "#/$defs/millisecondRange" },
-            "clock_skew_ms": { "type": "integer", "minimum": 0 },
-            "tick_ms": { "type": "integer", "minimum": 1 }
+            "latency_ms": {
+              "$ref": "#/$defs/millisecondRange"
+            },
+            "drop_rate": {
+              "$ref": "#/$defs/probability"
+            },
+            "dup_rate": {
+              "$ref": "#/$defs/probability"
+            },
+            "partition_rate": {
+              "$ref": "#/$defs/probability"
+            },
+            "partition_duration_ms": {
+              "$ref": "#/$defs/millisecondRange"
+            },
+            "crash_rate": {
+              "$ref": "#/$defs/probability"
+            },
+            "crash_duration_ms": {
+              "$ref": "#/$defs/millisecondRange"
+            },
+            "pause_rate": {
+              "$ref": "#/$defs/probability"
+            },
+            "pause_duration_ms": {
+              "$ref": "#/$defs/millisecondRange"
+            },
+            "clock_skew_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tick_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
         "plans": {
@@ -85,24 +172,66 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["kind", "key", "argument", "expected", "coordinator", "delay_ms"],
+              "required": [
+                "kind",
+                "key",
+                "argument",
+                "expected",
+                "coordinator",
+                "delay_ms"
+              ],
               "additionalProperties": false,
               "properties": {
-                "kind": { "enum": ["read", "write", "cas"] },
-                "key": { "type": "string" },
-                "argument": { "$ref": "#/$defs/value" },
-                "expected": { "$ref": "#/$defs/value" },
-                "coordinator": { "type": "integer", "minimum": 0 },
-                "delay_ms": { "type": "integer", "minimum": 0 }
+                "kind": {
+                  "enum": [
+                    "read",
+                    "write",
+                    "cas"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                },
+                "argument": {
+                  "$ref": "#/$defs/value"
+                },
+                "expected": {
+                  "$ref": "#/$defs/value"
+                },
+                "coordinator": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "delay_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
               }
             }
           }
+        },
+        "schedule": {
+          "description": "Explicit fault schedule. null means the faults were decided from the seed at run time.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/injectedFault"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
     "event": {
       "type": "object",
-      "required": ["t", "type"],
+      "required": [
+        "t",
+        "type"
+      ],
       "properties": {
         "t": {
           "description": "Logical milliseconds since the run started.",
@@ -122,55 +251,176 @@
             "node_resume"
           ]
         },
-        "id": { "type": "integer" },
-        "sender": { "type": "integer" },
-        "to": { "type": "integer" },
-        "node": { "type": "integer" },
-        "kind": { "type": "string" },
-        "reason": { "enum": ["loss", "partition", "crashed"] },
-        "copies": { "type": "integer", "minimum": 1 },
-        "until": { "type": "integer" },
-        "body": { "type": "object" },
+        "id": {
+          "type": "integer"
+        },
+        "sender": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "integer"
+        },
+        "node": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "loss",
+            "partition",
+            "crashed"
+          ]
+        },
+        "copies": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "until": {
+          "type": "integer"
+        },
+        "body": {
+          "type": "object"
+        },
         "groups": {
           "type": "array",
-          "items": { "type": "array", "items": { "type": "integer" } }
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
         }
       }
     },
     "operation": {
       "type": "object",
-      "required": ["index", "client", "kind", "key", "invoked", "returned", "outcome"],
+      "required": [
+        "index",
+        "client",
+        "kind",
+        "key",
+        "invoked",
+        "returned",
+        "outcome"
+      ],
       "additionalProperties": false,
       "properties": {
-        "index": { "type": "integer", "minimum": 0 },
-        "client": { "type": "integer", "minimum": 0 },
-        "kind": { "enum": ["read", "write", "cas"] },
-        "key": { "type": "string" },
-        "argument": { "$ref": "#/$defs/value" },
-        "expected": { "$ref": "#/$defs/value" },
-        "invoked": { "type": "integer", "minimum": 0 },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "client": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "read",
+            "write",
+            "cas"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "argument": {
+          "$ref": "#/$defs/value"
+        },
+        "expected": {
+          "$ref": "#/$defs/value"
+        },
+        "invoked": {
+          "type": "integer",
+          "minimum": 0
+        },
         "returned": {
           "description": "-1 when the operation never came back.",
           "type": "integer",
           "minimum": -1
         },
-        "outcome": { "enum": ["ok", "unknown"] },
-        "result": { "$ref": "#/$defs/value" }
+        "outcome": {
+          "enum": [
+            "ok",
+            "unknown"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/value"
+        }
       }
     },
     "verdict": {
       "type": "object",
-      "required": ["linearizable"],
+      "required": [
+        "linearizable"
+      ],
       "additionalProperties": false,
       "properties": {
-        "linearizable": { "type": "boolean" },
-        "key": { "type": ["string", "null"] },
-        "operation": { "type": ["integer", "null"] },
-        "explanation": { "type": ["string", "null"] },
-        "checked_operations": { "type": "integer", "minimum": 0 },
+        "linearizable": {
+          "type": "boolean"
+        },
+        "key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "explanation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checked_operations": {
+          "type": "integer",
+          "minimum": 0
+        },
         "exhausted": {
           "description": "True when the search hit its budget before deciding.",
           "type": "boolean"
+        }
+      }
+    },
+    "injectedFault": {
+      "type": "object",
+      "required": [
+        "at_ms",
+        "kind",
+        "duration_ms",
+        "targets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "at_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "partition",
+            "crash",
+            "pause"
+          ]
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1
         }
       }
     }
