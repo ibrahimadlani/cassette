@@ -12,20 +12,31 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from cassette.sim.events import CONTROL, FaultTick
+from cassette.sim.rng import Rng
 from cassette.sim.simulation import Simulation
 from cassette.sim.types import NodeId
+
+INJECTOR_STREAM = 0x9E3779B9
+"""Salt separating the adversary's draws from the network's.
+
+Without it, adding or removing a fault would shift every latency and loss
+decision taken afterwards, and the shrinker's central question — "does the bug
+survive without this fault?" — would be unanswerable, because removing the
+fault would also silently rewrite the network.
+"""
 
 
 class FaultInjector:
     """Decides what breaks, and when."""
 
-    __slots__ = ("_replicas", "_sim")
+    __slots__ = ("_replicas", "_rng", "_sim")
 
     def __init__(self, simulation: Simulation, replicas: Sequence[NodeId]) -> None:
         if len(replicas) < 2:
             raise ValueError("need at least two replicas to injure")
         self._sim = simulation
         self._replicas = sorted(replicas)
+        self._rng = Rng(simulation.rng.seed ^ INJECTOR_STREAM)
 
     def start(self) -> None:
         """Arm the first tick. Does nothing if the config injects nothing."""
@@ -37,7 +48,7 @@ class FaultInjector:
     def tick(self) -> None:
         """Roll for every fault kind, then arm the next tick."""
         config = self._sim.config
-        rng = self._sim.rng
+        rng = self._rng
 
         if rng.chance(config.partition_rate) and self._sim.network.partition is None:
             self._sim.schedule_partition(self._split(), rng.randint(*config.partition_duration_ms))
@@ -57,7 +68,7 @@ class FaultInjector:
         accepting work it has no right to — so the size is drawn uniformly over
         every proper subset rather than aiming for halves.
         """
-        rng = self._sim.rng
+        rng = self._rng
         size = rng.randint(1, len(self._replicas) - 1)
         chosen = frozenset(rng.sample(self._replicas, size))
         return chosen, frozenset(self._replicas) - chosen

@@ -39,10 +39,15 @@ def test_a_quiet_config_never_arms_the_injector() -> None:
     assert run(FaultConfig()).entries == []
 
 
+def closes_match_opens(types: list[str], opened: str, closed: str) -> bool:
+    """Every fault is undone, except possibly one still open at the horizon."""
+    return types.count(opened) - types.count(closed) in (0, 1)
+
+
 def test_partitions_open_and_close() -> None:
     types = run(FaultConfig(partition_rate=0.05)).types()
     assert types.count("partition_start") > 0
-    assert types.count("partition_end") == types.count("partition_start")
+    assert closes_match_opens(types, "partition_start", "partition_end")
 
 
 def test_a_second_partition_never_opens_over_the_first() -> None:
@@ -72,13 +77,21 @@ def test_a_split_always_has_two_non_empty_groups() -> None:
 def test_crashes_are_followed_by_restarts() -> None:
     types = run(FaultConfig(crash_rate=0.05)).types()
     assert types.count("node_crash") > 0
-    assert types.count("node_restart") == types.count("node_crash")
+    assert closes_match_opens(types, "node_crash", "node_restart")
 
 
 def test_pauses_are_followed_by_resumes() -> None:
     types = run(FaultConfig(pause_rate=0.05)).types()
     assert types.count("node_pause") > 0
-    assert types.count("node_resume") == types.count("node_pause")
+    assert closes_match_opens(types, "node_pause", "node_resume")
+
+
+def test_the_adversary_draws_from_its_own_stream() -> None:
+    """Network decisions must not move when the fault profile changes."""
+    quiet = run(FaultConfig(latency_ms=(5, 5)))
+    noisy = run(FaultConfig(latency_ms=(5, 5), crash_rate=0.05))
+    assert quiet.entries == []
+    assert any(event_type == "node_crash" for event_type, _ in noisy.entries)
 
 
 def test_the_same_seed_injects_the_same_faults() -> None:
