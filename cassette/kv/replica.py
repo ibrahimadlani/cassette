@@ -58,6 +58,8 @@ class Round:
     expected: Value = None
     phase: str = READ_PHASE
     version: Version = ZERO
+    result: Value = None
+    """What a read will answer once its write-back has been acknowledged."""
     replies: dict[NodeId, Stored] = field(default_factory=dict)
     acks: set[NodeId] = field(default_factory=set)
 
@@ -161,7 +163,19 @@ class Replica:
     def _on_read_quorum(self, env: Env, round_: Round) -> None:
         newest = round_.newest()
         if round_.op == READ_OP:
-            self._finish(env, round_, ok=True, value=newest.value)
+            if not self.config.read_repair or newest.version == ZERO:
+                self._finish(env, round_, ok=True, value=newest.value)
+                return
+            # Phase two of ABD. The quorum this read saw is not necessarily the
+            # quorum the next read will see, so returning now can let a later
+            # read observe an older value. Writing the winner back to W
+            # replicas first makes what this read reports durable, and reads
+            # stop going backwards.
+            round_.phase = WRITE_PHASE
+            round_.result = newest.value
+            round_.version = newest.version
+            self._broadcast(env, WriteRequest(round_.req, round_.key, newest.value, newest.version))
+            env.set_timer(self.config.request_timeout_ms, timer_tag(round_.req))
             return
         if round_.op == CAS_OP and newest.value != round_.expected:
             self._finish(env, round_, ok=True, value=NOT_SWAPPED)
@@ -203,7 +217,15 @@ class Replica:
         round_.acks.add(sender)
         if len(round_.acks) < self.config.write_quorum:
             return
-        self._finish(env, round_, ok=True, value=SWAPPED if round_.op == CAS_OP else None)
+        self._finish(env, round_, ok=True, value=self._answer(round_))
+
+    @staticmethod
+    def _answer(round_: Round) -> Value:
+        if round_.op == READ_OP:
+            return round_.result
+        if round_.op == CAS_OP:
+            return SWAPPED
+        return None
 
     def _finish(self, env: Env, round_: Round, *, ok: bool, value: Value = None) -> None:
         del self._rounds[round_.req]

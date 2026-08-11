@@ -23,6 +23,13 @@ class StoreConfig:
     stamp for different values. See docs/FINDINGS.md.
     """
 
+    read_repair: bool = True
+    """Whether a read makes the value it is about to return durable first.
+
+    Off, a read can return a value that a later read no longer sees — the
+    second phase of the ABD register construction, and the second finding.
+    """
+
     def __post_init__(self) -> None:
         if self.replicas < 1:
             raise ValueError(f"a cluster needs at least one replica, got {self.replicas}")
@@ -49,8 +56,8 @@ class StoreConfig:
 
     @property
     def faithful(self) -> bool:
-        """Whether the known defects are switched off."""
-        return self.stable_versions
+        """Whether both known defects are switched off."""
+        return self.stable_versions and self.read_repair
 
     def to_json(self) -> JsonDict:
         """Render for the trace envelope."""
@@ -60,6 +67,7 @@ class StoreConfig:
             "write_quorum": self.write_quorum,
             "request_timeout_ms": self.request_timeout_ms,
             "stable_versions": self.stable_versions,
+            "read_repair": self.read_repair,
         }
 
     @classmethod
