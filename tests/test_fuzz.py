@@ -7,10 +7,15 @@ from cassette.fuzz import Plan, fuzz, probe
 from cassette.kv.config import StoreConfig
 from cassette.scenario import QUIET, STANDARD, WorkloadSpec
 from cassette.sim.faults import PERFECT_NETWORK
+from tests.broken import BROKEN
 
-STANDARD_PLAN = Plan(preset="standard", faults=STANDARD)
-QUIET_PLAN = Plan(preset="quiet", faults=QUIET)
-PERFECT_PLAN = Plan(preset="quiet", faults=PERFECT_NETWORK)
+# Both known defects are fixed, so a fuzzer pointed at the current store finds
+# nothing — which is the point, and useless for testing the fuzzer. These plans
+# use the --buggy store, the same switch docs/FINDINGS.md documents.
+STANDARD_PLAN = Plan(preset="standard-buggy", store=BROKEN, faults=STANDARD)
+QUIET_PLAN = Plan(preset="quiet-buggy", store=BROKEN, faults=QUIET)
+PERFECT_PLAN = Plan(preset="quiet-buggy", store=BROKEN, faults=PERFECT_NETWORK)
+FIXED_PLAN = Plan(preset="standard", faults=STANDARD)
 
 
 def test_a_network_with_no_jitter_at_all_produces_no_violations() -> None:
@@ -20,6 +25,11 @@ def test_a_network_with_no_jitter_at_all_produces_no_violations() -> None:
 
 def test_a_faulty_network_produces_violations() -> None:
     assert fuzz(range(400), STANDARD_PLAN, stop_at_first=False).findings
+
+
+def test_the_fixed_store_survives_the_same_seeds() -> None:
+    """The other half of the claim. Same faults, same seeds, nothing found."""
+    assert fuzz(range(2_000), FIXED_PLAN, stop_at_first=False).clean is True
 
 
 def test_jitter_alone_is_enough_to_produce_violations() -> None:

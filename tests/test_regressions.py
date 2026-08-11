@@ -1,17 +1,17 @@
 """T-6: every seed that has ever failed is replayed on every run.
 
-Today these seeds still fail — the bug they found has not been fixed yet, and
-pretending otherwise would be worse than useless. What the suite pins right now
-is that they are *reproducible*: each one produces the same verdict, naming the
-same operation, every single time.
+All fourteen of them come back clean now. That is the assertion this file
+exists for, and it is the one that makes a fix mean something: a bug that has
+been found once cannot come back without the suite going red.
 
-That is the property the whole project rests on, and it is the property that
-makes the next step possible. Once the fix lands, this file gains the
-assertion it is really for: every seed in the corpus comes back clean.
+Reproducibility is still pinned alongside it. A regression suite built on
+seeds is only as good as the guarantee that a seed means the same thing
+tomorrow.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -51,7 +51,24 @@ def test_a_corpus_seed_replays_identically(entry: corpus.Entry) -> None:
 
 
 @pytest.mark.parametrize("entry", ENTRIES, ids=lambda entry: f"seed-{entry.seed}")
-def test_a_corpus_seed_still_reproduces_its_recorded_failure(entry: corpus.Entry) -> None:
+def test_a_corpus_seed_is_linearizable_now(entry: corpus.Entry) -> None:
     verdict = judge(entry)
-    assert verdict.violated, f"seed {entry.seed} no longer fails — update the corpus"
-    assert entry.note.startswith(str(verdict.explanation)[:20])
+    assert verdict.linearizable, f"seed {entry.seed} regressed: {verdict.explanation}"
+
+
+@pytest.mark.parametrize("entry", ENTRIES, ids=lambda entry: f"seed-{entry.seed}")
+def test_a_corpus_seed_fails_again_with_the_defects_switched_back_on(
+    entry: corpus.Entry,
+) -> None:
+    """The corpus proves the fix, so it has to prove the bug was there too.
+
+    Without this, a corpus of seeds that pass could just as easily be a corpus
+    of seeds that never failed.
+    """
+    scenario = entry.to_scenario()
+    broken = replace(
+        scenario, store=replace(scenario.store, stable_versions=False, read_repair=False)
+    )
+    verdict = execute(broken, record=False).verdict
+    assert verdict is not None
+    assert verdict.violated, f"seed {entry.seed} does not reproduce its original failure"

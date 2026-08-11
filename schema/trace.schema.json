@@ -96,7 +96,9 @@
             "replicas",
             "read_quorum",
             "write_quorum",
-            "request_timeout_ms"
+            "request_timeout_ms",
+            "stable_versions",
+            "read_repair"
           ],
           "additionalProperties": false,
           "properties": {
@@ -115,6 +117,14 @@
             "request_timeout_ms": {
               "type": "integer",
               "minimum": 1
+            },
+            "stable_versions": {
+              "description": "False re-enables the version-collision defect. See docs/FINDINGS.md.",
+              "type": "boolean"
+            },
+            "read_repair": {
+              "description": "False re-enables the missing read write-back. See docs/FINDINGS.md.",
+              "type": "boolean"
             }
           }
         },

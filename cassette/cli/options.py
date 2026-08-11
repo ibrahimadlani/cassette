@@ -62,6 +62,11 @@ def scenario_options(command: F) -> F:
         click.option("--pause-rate", type=float, default=None),
         click.option("--clock-skew-ms", type=int, default=None),
         click.option(
+            "--buggy",
+            is_flag=True,
+            help="Re-enable both fixed defects. See docs/FINDINGS.md.",
+        ),
+        click.option(
             "--horizon-ms",
             type=int,
             default=60_000,
@@ -78,11 +83,14 @@ def build_scenario(seed: int, **params: Any) -> Scenario:
     """Turn parsed options into a scenario."""
     nodes = int(params["nodes"])
     majority = nodes // 2 + 1
+    faithful = not params.get("buggy", False)
     store = StoreConfig(
         replicas=nodes,
         read_quorum=params["read_quorum"] or majority,
         write_quorum=params["write_quorum"] or majority,
         request_timeout_ms=params["timeout_ms"],
+        stable_versions=faithful,
+        read_repair=faithful,
     )
 
     faults = PRESETS[params["preset"]]
