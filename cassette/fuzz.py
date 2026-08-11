@@ -50,6 +50,7 @@ class Plan:
             clients=self.workload.clients,
             operations=self.workload.operations,
             horizon_ms=self.horizon_ms,
+            buggy=not self.store.faithful,
             note=note,
         )
 

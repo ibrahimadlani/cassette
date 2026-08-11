@@ -384,9 +384,10 @@ def _small_shapes(key: Key | None, like: Scenario) -> Iterator[Scenario]:
     """
     if key is None:
         return
-    store = StoreConfig(
-        replicas=3, read_quorum=2, write_quorum=2, request_timeout_ms=like.store.request_timeout_ms
-    )
+    # Everything about the store carries over except its size. A rebuilt
+    # scenario has to be running against the same implementation, defects
+    # included, or it is answering a different question.
+    store = replace(like.store, replicas=3, read_quorum=2, write_quorum=2)
     quiet = like.faults.without_faults()
     # How wide the jitter is decides whether two rounds overlap at all, so it is
     # part of the shape rather than a detail to inherit.

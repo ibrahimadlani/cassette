@@ -44,6 +44,7 @@ class Entry:
     clients: int = 3
     operations: int = 8
     horizon_ms: int = 60_000
+    buggy: bool = False
     note: str = ""
 
     def to_line(self) -> str:
@@ -58,7 +59,7 @@ class Entry:
             f"ops={self.operations}",
             f"horizon={self.horizon_ms}",
         )
-        line = " ".join(fields)
+        line = " ".join(fields) + (" buggy=1" if self.buggy else "")
         return f"{line}  # {self.note}" if self.note else line
 
     @classmethod
@@ -75,6 +76,7 @@ class Entry:
             clients=int(fields.get("clients", 3)),
             operations=int(fields.get("ops", 8)),
             horizon_ms=int(fields.get("horizon", 60_000)),
+            buggy=fields.get("buggy") == "1",
             note=note.strip(),
         )
 
@@ -86,8 +88,10 @@ class Entry:
                 replicas=self.nodes,
                 read_quorum=self.read_quorum,
                 write_quorum=self.write_quorum,
+                stable_versions=not self.buggy,
+                read_repair=not self.buggy,
             ),
-            faults=PRESETS[self.preset],
+            faults=PRESETS[self.preset.removesuffix("-buggy")],
             workload=WorkloadSpec(clients=self.clients, operations=self.operations),
             horizon_ms=self.horizon_ms,
         )

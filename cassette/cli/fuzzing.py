@@ -22,7 +22,7 @@ console = Console()
 def _plan_from(seed: int, params: dict[str, Any]) -> Plan:
     template = build_scenario(seed, **params)
     return Plan(
-        preset=str(params["preset"]),
+        preset=str(params["preset"]) + ("-buggy" if params.get("buggy") else ""),
         store=template.store,
         faults=template.faults,
         workload=_workload_of(params),
