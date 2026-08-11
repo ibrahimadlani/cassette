@@ -11,10 +11,10 @@ from dataclasses import replace
 
 import pytest
 
-from cassette import corpus
 from cassette.runner import execute
-from cassette.scenario import HARSH, STANDARD, generate
+from cassette.scenario import HARSH, STANDARD, Scenario, generate
 from cassette.sim.faults import CRASH, PARTITION, PAUSE, InjectedFault
+from tests.broken import failing_scenarios
 
 SEEDS = [1, 42, 161, 8421]
 
@@ -82,8 +82,8 @@ def test_a_scenario_with_a_schedule_round_trips() -> None:
     assert pinned.__class__.from_json(pinned.to_json()) == pinned
 
 
-@pytest.mark.parametrize("entry", corpus.load()[:4], ids=lambda e: f"seed-{e.seed}")
-def test_a_failing_corpus_seed_still_fails_once_pinned(entry: corpus.Entry) -> None:
-    run = execute(entry.to_scenario(), record=False)
+@pytest.mark.parametrize("scenario", failing_scenarios(4), ids=lambda s: f"seed-{s.seed}")
+def test_a_failing_scenario_still_fails_once_pinned(scenario: Scenario) -> None:
+    run = execute(scenario, record=False)
     assert run.violated
     assert execute(run.pinned(), record=False).verdict == run.verdict
