@@ -81,6 +81,7 @@ class Replica:
         self.node_id = node_id
         self.config = StoreConfig() if config is None else config
         self._store: dict[Key, Stored] = {}
+        self._issued: dict[Key, Version] = {}
         self._rounds: dict[int, Round] = {}
 
     # -- inspection -----------------------------------------------------
@@ -166,13 +167,34 @@ class Replica:
             self._finish(env, round_, ok=True, value=NOT_SWAPPED)
             return
         round_.phase = WRITE_PHASE
-        round_.version = newest.version.next_from(self.node_id)
+        round_.version = self._mint(round_.key, newest.version)
         self._broadcast(env, WriteRequest(round_.req, round_.key, round_.value, round_.version))
         # Phase two gets its own budget. A round that spent almost all of the
         # timeout gathering reads would otherwise abandon the write it has
         # already started, and abandoning a write is the worst outcome
         # available: the client is told nothing while replicas keep applying it.
         env.set_timer(self.config.request_timeout_ms, timer_tag(round_.req))
+
+    def _mint(self, key: Key, observed: Version) -> Version:
+        """A version strictly newer than anything this node has seen or issued.
+
+        The observed maximum is not enough on its own. Two rounds this replica
+        is coordinating at the same time both read the quorum before either
+        writes, both see the same maximum, and both derive the same successor —
+        identical stamp, different value. Replicas keep whichever arrives first
+        and reject the other while still acknowledging it, so the second write
+        is reported successful and is silently lost on part of the cluster.
+
+        Remembering what this node has already issued closes it. The record is
+        durable for the same reason a Raft term is: a node that forgot it
+        across a restart could mint a stamp it had already used.
+        """
+        if not self.config.stable_versions:
+            return observed.next_from(self.node_id)
+        highest = max(observed, self._issued.get(key, ZERO))
+        minted = highest.next_from(self.node_id)
+        self._issued[key] = minted
+        return minted
 
     def _on_write_ack(self, env: Env, sender: NodeId, msg: WriteAck) -> None:
         round_ = self._rounds.get(msg.req)
@@ -208,7 +230,11 @@ class Replica:
             self._finish(env, round_, ok=False)
 
     def on_crash(self) -> None:
-        """Lose everything volatile. `_store` is what a real node would have on disk."""
+        """Lose everything volatile.
+
+        `_store` and `_issued` are what a real node would have on disk. Rounds
+        are not: the process tracking them is gone.
+        """
         self._rounds.clear()
 
     def on_restart(self, env: Env) -> None:
