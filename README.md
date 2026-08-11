@@ -7,9 +7,9 @@ Deterministic simulation testing for distributed systems — every bug reproduce
 [![codecov](https://codecov.io/gh/ibrahimadlani/cassette/branch/main/graph/badge.svg)](https://codecov.io/gh/ibrahimadlani/cassette)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> Work in progress. The simulator, the replicated store and the linearizability
-> checker are done, and the fuzzer has started finding real bugs in the store.
-> The shrinker and the web replayer are next. See the [roadmap](#roadmap).
+> Work in progress. Everything but the web replayer is done: the simulator, the
+> store, the checker, the fuzzer and the shrinker. Two real consistency bugs
+> found, reduced and fixed. See the [roadmap](#roadmap).
 
 ## The idea
 
@@ -41,27 +41,39 @@ uncommon in a portfolio, which is why it is worth building.
 | Quorum-replicated key-value store | done |
 | Wing and Gong linearizability checker | done |
 | Parallel fuzzer and regression corpus | done |
-| Scenario shrinker | next |
+| Delta-debugging shrinker | done |
 | Web replayer | next |
 
-## What it has found so far
+## A bug it found
 
-Thirteen of the first two thousand seeds produce a stale read: a value that no
-correct key-value store could have returned, given what the clients had already
-been told.
-
-They are reproducible down to the operation index, they are recorded in
-[`regressions.txt`](regressions.txt), and they are not fixed yet. The next step
-is reducing one of them to something small enough to read.
+Fourteen of the first two thousand seeds returned a value no correct key-value
+store could have returned. The shrinker reduced every one of them to the same
+four operations, on three replicas, **with no injected faults at all**:
 
 ```
-$ cassette fuzz --seeds 2000 --workers 8 --all
-
-explored    2000 scenarios
-throughput  1158 scenarios/s
-
-NEW      seed 161: client 6 reads y -> 8 cannot be placed in any legal order
+1. client A writes x=1    via n2   -> ok
+2. client B writes x=2    via n2   -> ok
+3. client B reads  x      via n0   -> 2   <-- no legal order can explain this
+4. client A reads  x      via n1   -> 1
 ```
+
+Both writes go through the same coordinator. Both rounds read the quorum before
+either writes, so both derive the same version stamp for different values.
+Replicas keep the first and reject the second — while still acknowledging it.
+The losing write is reported successful and lands on half the cluster.
+
+The `(counter, node_id)` tiebreak only ever distinguished different
+coordinators. It did nothing about one coordinator racing itself.
+
+Fixing that left three violations, which turned out to be the missing
+write-back on the read path — the second phase of ABD. Both are written up in
+[docs/FINDINGS.md](docs/FINDINGS.md), and both are still reachable with
+`--buggy`:
+
+| | scenarios | wall time | violations |
+|---|---|---|---|
+| `--buggy` | 7 | 0.37 s | 1 |
+| fixed | 20 000 | 24.5 s | 0 |
 
 ## Try it
 
@@ -69,8 +81,9 @@ NEW      seed 161: client 6 reads y -> 8 cannot be placed in any legal order
 git clone https://github.com/ibrahimadlani/cassette
 cd cassette
 make install
-make fuzz          # explore 2000 seeds
-cassette run --seed 161
+make fuzz          # explore 2000 seeds, finds nothing now
+cassette fuzz --seeds 2000 --buggy   # switch the bugs back on
+cassette shrink --seed 6 --buggy
 ```
 
 The test that matters is `tests/test_determinism.py`: a thousand seeds, run
@@ -90,7 +103,7 @@ The rules, and the three independent mechanisms that enforce them, are in
 
 - `v0.1.0` — the simulator, with determinism proven by a test
 - `v0.2.0` — replicated KV store, linearizability checker and fuzzer
-- `v0.3.0` — scenario shrinker
+- `v0.3.0` — scenario shrinker, and both bugs fixed
 - `v1.0.0` — web replayer, deployed
 
 ## Licence
