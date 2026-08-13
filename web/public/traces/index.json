@@ -1,0 +1,74 @@
+[
+  {
+    "slug": "minimal-violation",
+    "title": "The bug, reduced",
+    "blurb": "Four operations, three replicas, no injected faults. Both writes go through n2 and end up with the same version stamp, so the two reads disagree about what happened.",
+    "seed": 84,
+    "replicas": 3,
+    "operations": 4,
+    "events": 88,
+    "faulty": true,
+    "linearizable": false,
+    "bytes": 10951
+  },
+  {
+    "slug": "violation-in-the-wild",
+    "title": "The same bug, unreduced",
+    "blurb": "The seed the fuzzer actually reported: five replicas, three clients, eighteen operations and every fault switched on. Reproducible, and unreadable \u2014 which is what the shrinker is for.",
+    "seed": 77,
+    "replicas": 5,
+    "operations": 18,
+    "events": 573,
+    "faulty": true,
+    "linearizable": false,
+    "bytes": 66302
+  },
+  {
+    "slug": "partition",
+    "title": "A network partition",
+    "blurb": "The cluster splits, a minority keeps accepting requests it cannot complete, and the split heals. The fixed store stays linearizable throughout.",
+    "seed": 8421,
+    "replicas": 5,
+    "operations": 18,
+    "events": 669,
+    "faulty": false,
+    "linearizable": true,
+    "bytes": 76994
+  },
+  {
+    "slug": "crash-restart",
+    "title": "Nodes crashing and coming back",
+    "blurb": "Replicas lose their volatile state and restart. Acknowledged writes survive, because that is what makes them durable state.",
+    "seed": 4242,
+    "replicas": 5,
+    "operations": 18,
+    "events": 626,
+    "faulty": false,
+    "linearizable": true,
+    "bytes": 71370
+  },
+  {
+    "slug": "everything-at-once",
+    "title": "Everything at once",
+    "blurb": "Loss, duplication, partitions, crashes, pauses and clock skew together. Still linearizable.",
+    "seed": 1234,
+    "replicas": 5,
+    "operations": 18,
+    "events": 538,
+    "faulty": false,
+    "linearizable": true,
+    "bytes": 57774
+  },
+  {
+    "slug": "healthy",
+    "title": "A healthy cluster",
+    "blurb": "Jitter and reordering only. What the diagram looks like when nothing is wrong.",
+    "seed": 1,
+    "replicas": 5,
+    "operations": 18,
+    "events": 732,
+    "faulty": false,
+    "linearizable": true,
+    "bytes": 83790
+  }
+]
