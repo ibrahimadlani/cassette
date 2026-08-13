@@ -1,0 +1,438 @@
+:root {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --panel-edge: #262d36;
+  --ink: #e6edf3;
+  --ink-dim: #8b949e;
+  --ink-faint: #4d5563;
+
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+
+  --read: #6ea8fe;
+  --write: #a371f7;
+  --client: #39c5cf;
+
+  --lane: #21262d;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+.app {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+/* -- header ------------------------------------------------------------ */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: 1px solid var(--panel-edge);
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+}
+
+.masthead h1 {
+  font-size: 21px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.masthead .tagline {
+  color: var(--ink-dim);
+  font-size: 14px;
+  flex: 1 1 320px;
+}
+
+.masthead a {
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.masthead a:hover {
+  text-decoration: underline;
+}
+
+/* -- catalogue --------------------------------------------------------- */
+
+.catalogue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.chip {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.chip[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.chip .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: 1px;
+  background: var(--ok);
+}
+
+.chip .dot--bad {
+  background: var(--bad);
+}
+
+/* -- verdict ----------------------------------------------------------- */
+
+.verdict {
+  border: 1px solid var(--panel-edge);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  background: var(--panel);
+}
+
+.verdict--ok {
+  border-left-color: var(--ok);
+}
+
+.verdict--bad {
+  border-left-color: var(--bad);
+}
+
+.verdict h2 {
+  font-size: 14px;
+  margin: 0 0 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.verdict--ok h2 {
+  color: var(--ok);
+}
+
+.verdict--bad h2 {
+  color: var(--bad);
+}
+
+.verdict p {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.verdict code {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+/* -- diagram ----------------------------------------------------------- */
+
+.stage {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 8px 4px 4px;
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.spacetime {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  cursor: crosshair;
+}
+
+.lane {
+  stroke: var(--lane);
+  stroke-width: 1;
+}
+
+.lane-label {
+  fill: var(--ink-dim);
+  font: 12px var(--mono);
+}
+
+.band--partition {
+  fill: color-mix(in srgb, var(--warn) 12%, transparent);
+  stroke: color-mix(in srgb, var(--warn) 40%, transparent);
+  stroke-dasharray: 3 3;
+}
+
+.band--down {
+  fill: color-mix(in srgb, var(--bad) 22%, transparent);
+  rx: 4;
+}
+
+.band--paused {
+  fill: color-mix(in srgb, var(--warn) 22%, transparent);
+  rx: 4;
+}
+
+.flight {
+  stroke-width: 1.1;
+  fill: none;
+}
+
+.flight--future {
+  stroke: var(--ink-faint);
+  opacity: 0.25;
+}
+
+.flight--past {
+  opacity: 0.85;
+}
+
+.flight--past.flight--read {
+  stroke: var(--read);
+}
+
+.flight--past.flight--write {
+  stroke: var(--write);
+}
+
+.flight--past.flight--client {
+  stroke: var(--client);
+}
+
+.flight--lost {
+  stroke-dasharray: 3 2;
+  opacity: 0.55;
+}
+
+.lost-mark {
+  fill: var(--bad);
+  font: 13px var(--mono);
+  pointer-events: none;
+}
+
+.operation {
+  fill: color-mix(in srgb, var(--client) 22%, var(--panel));
+  stroke: color-mix(in srgb, var(--client) 60%, transparent);
+}
+
+.operation--write {
+  fill: color-mix(in srgb, var(--write) 22%, var(--panel));
+  stroke: color-mix(in srgb, var(--write) 60%, transparent);
+}
+
+.operation--read {
+  fill: color-mix(in srgb, var(--read) 20%, var(--panel));
+  stroke: color-mix(in srgb, var(--read) 55%, transparent);
+}
+
+.operation--unknown {
+  stroke-dasharray: 3 2;
+  opacity: 0.6;
+}
+
+.operation--violating {
+  fill: color-mix(in srgb, var(--bad) 34%, var(--panel));
+  stroke: var(--bad);
+  stroke-width: 2;
+}
+
+.operation-label {
+  fill: var(--ink);
+  font: 10px var(--mono);
+  pointer-events: none;
+}
+
+.playhead {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.playhead-label {
+  fill: var(--accent);
+  font: 11px var(--mono);
+}
+
+/* -- controls ---------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+}
+
+.controls button {
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: 13px/1 var(--mono);
+  cursor: pointer;
+}
+
+.controls button:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+.controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.controls button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+  min-width: 74px;
+}
+
+.controls input[type="range"] {
+  flex: 1 1 220px;
+  accent-color: var(--accent);
+}
+
+.controls select {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: 13px var(--mono);
+}
+
+.controls .readout {
+  font: 13px var(--mono);
+  color: var(--ink-dim);
+  min-width: 132px;
+}
+
+/* -- panels ------------------------------------------------------------ */
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(340px, 1.4fr);
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.panel h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+  margin: 0 0 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 13px var(--mono);
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-faint);
+  padding-bottom: 6px;
+}
+
+td {
+  padding: 3px 0;
+  border-top: 1px solid var(--lane);
+}
+
+.status--up {
+  color: var(--ok);
+}
+
+.status--down {
+  color: var(--bad);
+}
+
+.status--paused {
+  color: var(--warn);
+}
+
+.divergent td {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.op-row--violating {
+  color: var(--bad);
+}
+
+.op-row--pending {
+  color: var(--ink-faint);
+}
+
+.op-row--future {
+  opacity: 0.35;
+}
+
+.footnote {
+  margin-top: 24px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.loading,
+.failure {
+  padding: 40px 0;
+  color: var(--ink-dim);
+}
+
+.failure {
+  color: var(--bad);
+  font-family: var(--mono);
+}

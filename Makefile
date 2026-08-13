@@ -1,4 +1,4 @@
-.PHONY: help install lint format types test run fuzz shrink regress clean
+.PHONY: help install lint format types test run fuzz shrink regress traces web demo clean
 
 PYTHON ?= python3
 VENV   := .venv
@@ -39,6 +39,20 @@ shrink: ## reduce a failing seed to a minimal scenario (make shrink SEED=6)
 regress: ## replay every seed in the regression corpus
 	$(BIN)/cassette regress
 
+traces: ## rebuild the traces the web replayer serves
+	$(BIN)/python scripts/build_traces.py
+
+web: ## build the web replayer
+	cd web && npm ci && npm test && npm run build
+
+demo: ## the whole story in one command
+	@echo "\n== 2000 scenarios against the current store =="
+	@$(BIN)/cassette fuzz --seeds 2000 --workers 8 --all --no-record || true
+	@echo "\n== the same fuzzer with the fixed defects switched back on =="
+	@$(BIN)/cassette fuzz --seeds 2000 --workers 8 --buggy --no-record || true
+	@echo "\n== reducing one of them =="
+	@$(BIN)/cassette shrink --seed 77 --buggy --clients 3 --ops 6
+
 clean: ## remove caches and build artefacts
-	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist
+	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist web/dist
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
