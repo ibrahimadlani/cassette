@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "./App";
+import { App, requestedSlug } from "./App";
 import { buildFrames } from "./model";
 import { parseTrace } from "./trace";
 
@@ -62,6 +62,29 @@ describe("the exported traces", () => {
     const trace = parseTrace(fixture("minimal-violation"));
     expect(trace.history.length).toBeLessThanOrEqual(6);
     expect(trace.verdict?.linearizable).toBe(false);
+  });
+});
+
+describe("requestedSlug", () => {
+  it("defaults to the first exhibit", () => {
+    expect(requestedSlug(catalogue, "")).toBe(catalogue[0].slug);
+  });
+
+  it("honours ?trace=", () => {
+    expect(requestedSlug(catalogue, "?trace=partition")).toBe("partition");
+  });
+
+  it("honours ?seed= as well, because that is what the README says", () => {
+    const entry = catalogue[0];
+    expect(requestedSlug(catalogue, `?seed=${entry.seed}`)).toBe(entry.slug);
+  });
+
+  it("ignores a slug that is not in the catalogue", () => {
+    expect(requestedSlug(catalogue, "?trace=nonsense")).toBe(catalogue[0].slug);
+  });
+
+  it("ignores a seed that is not in the catalogue", () => {
+    expect(requestedSlug(catalogue, "?seed=999999")).toBe(catalogue[0].slug);
   });
 });
 

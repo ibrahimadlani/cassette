@@ -22,10 +22,24 @@ function traceUrl(slug: string): string {
   return `${import.meta.env.BASE_URL}traces/${slug}.json`;
 }
 
-/** The exhibit named in `?trace=`, falling back to the first in the catalogue. */
-function requestedSlug(catalogue: CatalogueEntry[]): string {
-  const wanted = new URLSearchParams(window.location.search).get("trace");
-  if (wanted && catalogue.some((entry) => entry.slug === wanted)) return wanted;
+/**
+ * The exhibit asked for in the URL, falling back to the first in the catalogue.
+ *
+ * `?trace=<slug>` is the canonical form. `?seed=<n>` also works, because that
+ * is what somebody who has just read the README will try.
+ */
+export function requestedSlug(catalogue: CatalogueEntry[], search: string): string {
+  const params = new URLSearchParams(search);
+
+  const slug = params.get("trace");
+  if (slug && catalogue.some((entry) => entry.slug === slug)) return slug;
+
+  const seed = params.get("seed");
+  if (seed !== null) {
+    const bySeed = catalogue.find((entry) => String(entry.seed) === seed);
+    if (bySeed) return bySeed.slug;
+  }
+
   return catalogue[0]?.slug ?? "";
 }
 
@@ -44,7 +58,7 @@ export function App() {
       .then((response) => response.json() as Promise<CatalogueEntry[]>)
       .then((entries) => {
         setCatalogue(entries);
-        setSlug(requestedSlug(entries));
+        setSlug(requestedSlug(entries, window.location.search));
       })
       .catch((reason: unknown) => setFailure(`could not load the catalogue: ${String(reason)}`));
   }, []);
