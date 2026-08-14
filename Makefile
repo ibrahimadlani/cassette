@@ -1,4 +1,4 @@
-.PHONY: help install lint format types test run fuzz shrink regress traces web demo clean
+.PHONY: help install lint format types test run fuzz shrink regress traces web demo bench gif clean
 
 PYTHON ?= python3
 VENV   := .venv
@@ -51,7 +51,14 @@ demo: ## the whole story in one command
 	@echo "\n== the same fuzzer with the fixed defects switched back on =="
 	@$(BIN)/cassette fuzz --seeds 2000 --workers 8 --buggy --no-record || true
 	@echo "\n== reducing one of them =="
-	@$(BIN)/cassette shrink --seed 77 --buggy --clients 3 --ops 6
+	@$(BIN)/cassette shrink --seed 6 --buggy
+
+bench: ## measure the numbers the README publishes
+	$(BIN)/python scripts/benchmark.py
+
+gif: ## re-record the README demo from real command output
+	$(BIN)/pip install --quiet pillow
+	PATH="$(PWD)/$(BIN):$$PATH" $(BIN)/python scripts/record_demo.py
 
 clean: ## remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist web/dist
