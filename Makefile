@@ -57,7 +57,6 @@ bench: ## measure the numbers the README publishes
 	$(BIN)/python scripts/benchmark.py
 
 gif: ## re-record the README demo from real command output
-	$(BIN)/pip install --quiet pillow
 	PATH="$(PWD)/$(BIN):$$PATH" $(BIN)/python scripts/record_demo.py
 
 clean: ## remove caches and build artefacts

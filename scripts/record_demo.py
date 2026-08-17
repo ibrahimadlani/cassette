@@ -5,8 +5,7 @@ Nothing here is staged. The script runs `cassette fuzz`, `cassette fuzz
 out frame by frame into an animated GIF. If the tool stops finding the bug, the
 GIF stops showing it being found.
 
-Not committed to the toolchain: this needs Pillow, which is a documentation
-dependency rather than a project one. `make gif` installs it.
+Run it with `make gif` after anything that changes what those commands print.
 """
 
 from __future__ import annotations
