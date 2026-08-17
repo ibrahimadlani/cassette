@@ -61,7 +61,7 @@ Every number here comes out of that script; none of them is estimated.
 | Median shrink ratio | **10.1×** (488 events → 48, 24 operations → 4) |
 | Seeds in the regression corpus | **14** |
 | Determinism check | 1 000 seeds × 2 runs, hashes compared, **6.4 s** |
-| Tests · coverage | 475 · **92 %** |
+| Tests · coverage | 485 Python + 43 TypeScript · **92 %** |
 
 ## A bug it found
 
