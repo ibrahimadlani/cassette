@@ -37,7 +37,9 @@ def describe(op: Operation, names: dict[NodeId, str], coordinator: NodeId | None
         action = f"reads  {op.key}"
     else:
         action = f"cas    {op.key} {op.expected}->{op.argument}"
-    action = action.ljust(12)
+    # Wide enough for the longest form, `cas    key old->new`, so that four
+    # lines of different shapes still read as a table.
+    action = action.ljust(14)
 
     if not op.completed:
         outcome = "(no answer)"
