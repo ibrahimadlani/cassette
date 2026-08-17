@@ -9,9 +9,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Controls } from "./components/Controls";
-import { HistoryPanel, NodePanel } from "./components/Panels";
+import {
+  HistoryPanel,
+  NodePanel,
+  WhatIsHappening,
+  alertFor,
+  divergentAt,
+} from "./components/Panels";
 import { SpaceTime } from "./components/SpaceTime";
 import { buildFlights, buildFrames, frameAt } from "./model";
+import { humanise, idleNarration, makeNarrator } from "./narrate";
+import type { Theme } from "./theme";
+import { applyTheme, currentTheme, otherTheme } from "./theme";
 import type { CatalogueEntry, Trace } from "./trace";
 import { duration, parseTrace } from "./trace";
 
@@ -48,6 +57,7 @@ export function App() {
   const [slug, setSlug] = useState<string>("");
   const [trace, setTrace] = useState<Trace | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>(currentTheme);
 
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -80,13 +90,18 @@ export function App() {
     window.history.replaceState(null, "", url);
   }, [slug]);
 
+  const toggleTheme = useCallback(() => {
+    setTheme((was) => applyTheme(otherTheme(was)));
+  }, []);
+
   const frames = useMemo(() => (trace ? buildFrames(trace) : []), [trace]);
   const flights = useMemo(() => (trace ? buildFlights(trace) : []), [trace]);
+  const narrator = useMemo(() => (trace ? makeNarrator(trace) : null), [trace]);
   const span = trace ? duration(trace) : 1;
 
   // Simulated milliseconds per real second, so 1x replays the run at the speed
   // the cluster would have lived it.
-  const tick = useRef<number>(0);
+  const carry = useRef<number>(0);
   useEffect(() => {
     if (!playing || frames.length === 0) return;
     const handle = window.setInterval(() => {
@@ -95,10 +110,10 @@ export function App() {
           setPlaying(false);
           return current;
         }
-        tick.current += (FRAME_MS * speed) / 1000;
-        const target = (frames[current]?.t ?? 0) + tick.current * 1000;
+        carry.current += FRAME_MS * speed;
+        const target = (frames[current]?.t ?? 0) + carry.current;
         const next = Math.max(current + 1, frameAt(frames, target));
-        tick.current = 0;
+        carry.current = 0;
         return Math.min(next, frames.length - 1);
       });
     }, FRAME_MS);
@@ -129,101 +144,197 @@ export function App() {
   const current = frames[frame];
 
   return (
-    <div className="app">
+    <>
       <header className="masthead">
-        <h1>Cassette</h1>
+        <div className="wordmark">
+          <b>Cassette</b>
+          <span>trace replayer</span>
+        </div>
         <span className="tagline">
-          A recorded simulation of a replicated key-value store. Every message, every
-          partition, every crash — and the operation that could not have happened.
+          Deterministic simulation testing for distributed systems. Every bug reproduces,
+          every time.
         </span>
-        <a href={REPO}>source ↗</a>
+        <nav>
+          <button className="pill" onClick={toggleTheme} aria-label="Toggle colour theme">
+            {otherTheme(theme)}
+          </button>
+          <a className="pill pill--link" href={REPO}>
+            source ↗
+          </a>
+        </nav>
       </header>
 
-      <nav className="catalogue" aria-label="Recorded runs">
-        {(catalogue ?? []).map((option) => (
-          <button
-            key={option.slug}
-            className="chip"
-            aria-pressed={option.slug === slug}
-            onClick={() => setSlug(option.slug)}
-          >
-            <span className={option.linearizable ? "dot" : "dot dot--bad"} />
-            {option.title}
-          </button>
-        ))}
-      </nav>
-
-      {failure && <p className="failure">{failure}</p>}
-      {!trace && !failure && <p className="loading">loading…</p>}
-
-      {trace && current && (
-        <>
-          <Verdict trace={trace} blurb={entry?.blurb} />
-
-          <div className="stage">
-            <SpaceTime
-              trace={trace}
-              frames={frames}
-              flights={flights}
-              frame={frame}
-              onScrub={(time) => {
-                setPlaying(false);
-                setFrame(frameAt(frames, time));
-              }}
-            />
+      <div className="app">
+        <section className="hero">
+          <div className="hero-copy">
+            <span className="eyebrow">Recorded run</span>
+            <h1>{entry?.title ?? "Loading the catalogue"}</h1>
+            <p>
+              {entry?.blurb ??
+                "One seed describes a run completely, so the same interleaving replays exactly."}
+            </p>
           </div>
+          {trace && (
+            <div className="stats">
+              <div>
+                <span className="eyebrow">seed</span>
+                <b>{trace.seed}</b>
+              </div>
+              <div>
+                <span className="eyebrow">replicas</span>
+                <b>{trace.scenario.store.replicas}</b>
+              </div>
+              <div>
+                <span className="eyebrow">quorums</span>
+                <b>
+                  R={trace.scenario.store.read_quorum} W={trace.scenario.store.write_quorum}
+                </b>
+              </div>
+              <div>
+                <span className="eyebrow">events</span>
+                <b>{trace.events.length}</b>
+              </div>
+            </div>
+          )}
+        </section>
 
-          <Controls
-            frame={frame}
-            frames={frames.length}
-            time={current.t}
-            span={span}
-            playing={playing}
-            speed={speed}
-            onPlayPause={() =>
-              setPlaying((was) => {
-                if (!was && frame >= frames.length - 1) setFrame(0);
-                return !was;
-              })
-            }
-            onStep={step}
-            onSeek={(next) => {
-              setPlaying(false);
-              setFrame(next);
-            }}
-            onSpeed={setSpeed}
-          />
+        <section className="catalogue">
+          <span className="eyebrow">Runs in the catalogue</span>
+          <nav className="chips" aria-label="Recorded runs">
+            {(catalogue ?? []).map((option) => (
+              <button
+                key={option.slug}
+                className="chip"
+                aria-pressed={option.slug === slug}
+                onClick={() => setSlug(option.slug)}
+              >
+                <span className={option.linearizable ? "dot" : "dot dot--bad"} />
+                {option.title}
+              </button>
+            ))}
+          </nav>
+        </section>
 
-          <div className="panels">
-            <NodePanel trace={trace} frame={current} />
-            <HistoryPanel trace={trace} time={current.t} />
-          </div>
+        {failure && <p className="failure">{failure}</p>}
+        {!trace && !failure && <p className="loading">loading trace…</p>}
 
-          <p className="footnote">
-            Seed {trace.seed} · {trace.scenario.store.replicas} replicas · R=
-            {trace.scenario.store.read_quorum} W={trace.scenario.store.write_quorum} ·{" "}
-            {trace.events.length} events. Space plays and pauses; the arrow keys step.
-            Reproduce this run with <code>cassette run --seed {trace.seed}</code>.
-          </p>
-        </>
-      )}
+        {trace && current && narrator && (
+          <>
+            <Verdict trace={trace} />
+
+            <div className="card">
+              <div className="card-head">
+                <span className="eyebrow">Space–time</span>
+                <Legend />
+              </div>
+
+              <SpaceTime
+                trace={trace}
+                frames={frames}
+                flights={flights}
+                frame={frame}
+                onScrub={(time) => {
+                  setPlaying(false);
+                  setFrame(frameAt(frames, time));
+                }}
+              />
+
+              <Controls
+                frame={frame}
+                frames={frames.length}
+                time={current.t}
+                span={span}
+                playing={playing}
+                speed={speed}
+                onPlayPause={() =>
+                  setPlaying((was) => {
+                    if (!was && frame >= frames.length - 1) setFrame(0);
+                    return !was;
+                  })
+                }
+                onStep={step}
+                onSeek={(next) => {
+                  setPlaying(false);
+                  setFrame(next);
+                }}
+                onSpeed={setSpeed}
+              />
+            </div>
+
+            <div className="panels">
+              <WhatIsHappening
+                trace={trace}
+                frame={current}
+                narrator={narrator}
+                idle={idleNarration()}
+                alert={alertFor(trace, current, divergentAt(trace, current))}
+              />
+              <NodePanel trace={trace} frame={current} />
+              <HistoryPanel trace={trace} time={current.t} />
+            </div>
+
+            <p className="footnote">
+              Space plays and pauses; the arrow keys step one event at a time. Reproduce this
+              run with <code>cassette run --seed {trace.seed}</code>
+            </p>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="legend">
+      <span>
+        <i className="swatch swatch--write" /> write msg
+      </span>
+      <span>
+        <i className="swatch swatch--read" /> read msg
+      </span>
+      <span>
+        <i className="swatch swatch--dropped" /> dropped
+      </span>
+      <span>
+        <i className="swatch swatch--partition" /> partition
+      </span>
+      <span>
+        <i className="swatch swatch--down" /> node down
+      </span>
+      <span>
+        <i className="swatch swatch--violation" /> violation
+      </span>
     </div>
   );
 }
 
-function Verdict({ trace, blurb }: { trace: Trace; blurb?: string | undefined }) {
+function Verdict({ trace }: { trace: Trace }) {
   const verdict = trace.verdict;
   const linearizable = verdict === null || verdict.linearizable;
 
   return (
     <section className={`verdict verdict--${linearizable ? "ok" : "bad"}`}>
-      <h2>{linearizable ? "Linearizable" : "Not linearizable"}</h2>
-      <p>
-        {linearizable
-          ? blurb ?? "Every client observation can be explained by some ordering of the operations."
-          : verdict?.explanation ?? "No legal ordering exists."}
-      </p>
-      {!linearizable && blurb && <p style={{ marginTop: 6 }}>{blurb}</p>}
+      <div className="verdict-main">
+        <h2>{linearizable ? "Linearizable" : "Not linearizable"}</h2>
+        <p>
+          {linearizable
+            ? "Every client observation can be explained by some ordering of the operations."
+            : verdict?.explanation
+              ? humanise(trace, verdict.explanation)
+              : "No legal ordering of these operations explains what the clients saw."}
+        </p>
+      </div>
+      <div className="verdict-checker">
+        <span className="eyebrow">checker</span>
+        <span>
+          {verdict
+            ? `${verdict.checked_operations} operations checked${
+                verdict.exhausted ? " · search exhausted" : ""
+              }`
+            : "not checked"}
+        </span>
+      </div>
     </section>
   );
 }

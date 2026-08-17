@@ -52,7 +52,7 @@ export function Controls({
       />
 
       <span className="readout">
-        {time} / {span} ms · {frame}/{frames - 1}
+        {time} / {span} ms · event {frame}/{frames - 1}
       </span>
 
       <select
