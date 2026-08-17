@@ -7,13 +7,15 @@
  * the two halves of this project only meet at the schema.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App, requestedSlug } from "./App";
 import { buildFrames } from "./model";
+import { humanise } from "./narrate";
+import { applyTheme, currentTheme, otherTheme, storedTheme } from "./theme";
 import { parseTrace } from "./trace";
 
 const TRACES = join(__dirname, "..", "public", "traces");
@@ -89,9 +91,36 @@ describe("requestedSlug", () => {
 });
 
 describe("App", () => {
-  it("renders the catalogue", async () => {
-    render(<App />);
-    await waitFor(() => expect(screen.getByText("The bug, reduced")).toBeDefined());
+  it("renders the catalogue as chips", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelectorAll(".chip").length).toBeGreaterThan(0));
+    const titles = Array.from(container.querySelectorAll(".chip")).map((c) => c.textContent);
+    for (const entry of catalogue) {
+      expect(titles.some((title) => title?.includes(entry.title))).toBe(true);
+    }
+  });
+
+  it("marks the open run as the pressed chip", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".chip")).not.toBeNull());
+    expect(container.querySelectorAll('.chip[aria-pressed="true"]')).toHaveLength(1);
+  });
+
+  it("leads with the run title and its blurb", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector("h1")).not.toBeNull());
+    expect(container.querySelector("h1")?.textContent).toBe(catalogue[0].title);
+    expect(container.querySelector(".hero p")?.textContent).toBe(catalogue[0].blurb);
+  });
+
+  it("shows the run's headline numbers", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".stats")).not.toBeNull());
+    const trace = parseTrace(fixture("minimal-violation"));
+    const values = Array.from(container.querySelectorAll(".stats b")).map((b) => b.textContent);
+    expect(values).toContain(String(trace.seed));
+    expect(values).toContain(String(trace.scenario.store.replicas));
+    expect(values).toContain(String(trace.events.length));
   });
 
   it("shows the verdict for a failing run", async () => {
@@ -114,10 +143,88 @@ describe("App", () => {
 
   it("lists every client operation in the history panel", async () => {
     const { container } = render(<App />);
-    await waitFor(() => expect(container.querySelector(".panel")).not.toBeNull());
+    await waitFor(() => expect(container.querySelector(".panels")).not.toBeNull());
     const trace = parseTrace(fixture("minimal-violation"));
     const rows = container.querySelectorAll(".panels table tbody tr");
     expect(rows.length).toBeGreaterThanOrEqual(trace.history.length);
+  });
+
+  it("draws a labelled time axis", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".spacetime")).not.toBeNull());
+    const labels = Array.from(container.querySelectorAll(".tick-label")).map((t) => t.textContent);
+    expect(labels.length).toBeGreaterThan(2);
+    expect(labels[0]).toBe("0 ms");
+  });
+
+  it("names the lanes for replicas and clients", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".spacetime")).not.toBeNull());
+    const labels = Array.from(container.querySelectorAll(".lane-label")).map((l) => l.textContent);
+    expect(labels).toContain("n0");
+    expect(labels.some((label) => label?.startsWith("client "))).toBe(true);
+  });
+
+  it("points at the violating operation", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".spacetime")).not.toBeNull());
+    expect(container.querySelector(".marker-label")?.textContent).toContain("no legal order");
+  });
+
+  it("says in words what the playhead is sitting on", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".narration")).not.toBeNull());
+    expect(container.querySelector(".narration")?.textContent).toContain("idle");
+  });
+
+  it("narrates the event once it has stepped onto one", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".narration")).not.toBeNull());
+    fireEvent.click(screen.getByLabelText("Step forward"));
+    const text = container.querySelector(".narration")?.textContent ?? "";
+    expect(text).not.toContain("idle");
+    expect(text.length).toBeGreaterThan(10);
+  });
+
+  it("keeps a fading trail of the events just before", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".narration")).not.toBeNull());
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByLabelText("Step forward"));
+    expect(container.querySelectorAll(".recent div").length).toBeGreaterThan(0);
+  });
+
+  it("raises an alert once the violating read has returned", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".spacetime")).not.toBeNull());
+    fireEvent.change(screen.getByLabelText("Position in the run"), {
+      target: { value: "10000" },
+    });
+    expect(container.querySelector(".alert")?.textContent).toContain("No ordering");
+  });
+
+  it("names clients the same way the checker does not", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".verdict")).not.toBeNull());
+    const text = container.querySelector(".verdict p")?.textContent ?? "";
+    expect(text).toMatch(/client [A-Z]\b/);
+    expect(text).not.toMatch(/client \d/);
+  });
+
+  it("reports how much the checker looked at", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector(".verdict")).not.toBeNull());
+    expect(container.querySelector(".verdict-checker")?.textContent).toContain(
+      "operations checked",
+    );
+  });
+
+  it("toggles the colour theme", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByLabelText("Toggle colour theme")).toBeDefined());
+    const before = currentTheme();
+    fireEvent.click(screen.getByLabelText("Toggle colour theme"));
+    expect(currentTheme()).toBe(otherTheme(before));
+    expect(screen.getByLabelText("Toggle colour theme").textContent).toBe(before);
   });
 
   it("offers play, step and scrub controls", async () => {
@@ -137,5 +244,90 @@ describe("App", () => {
     );
     render(<App />);
     await waitFor(() => expect(screen.getByText(/version 99 is not supported/)).toBeDefined());
+  });
+});
+
+describe("theme", () => {
+  it("reads back what was applied", () => {
+    applyTheme("dark");
+    expect(currentTheme()).toBe("dark");
+    applyTheme("light");
+    expect(currentTheme()).toBe("light");
+  });
+
+  it("remembers the choice when storage allows it", () => {
+    // jsdom does not always expose localStorage, and the point here is the
+    // round trip rather than the browser, so install one that works.
+    const store = new Map<string, string>();
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+      },
+    });
+
+    applyTheme("dark");
+    expect(storedTheme()).toBe("dark");
+    applyTheme("light");
+    expect(storedTheme()).toBe("light");
+
+    if (original) Object.defineProperty(window, "localStorage", original);
+    else Reflect.deleteProperty(window, "localStorage");
+  });
+
+  it("ignores a stored value that is not a theme", () => {
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: { getItem: () => "chartreuse", setItem: () => undefined },
+    });
+
+    expect(storedTheme()).toBeNull();
+
+    if (original) Object.defineProperty(window, "localStorage", original);
+    else Reflect.deleteProperty(window, "localStorage");
+  });
+
+  it("survives storage that throws", () => {
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("denied");
+      },
+    });
+    expect(() => applyTheme("dark")).not.toThrow();
+    expect(currentTheme()).toBe("dark");
+    expect(storedTheme()).toBeNull();
+    if (original) Object.defineProperty(window, "localStorage", original);
+  });
+
+  it("flips", () => {
+    expect(otherTheme("dark")).toBe("light");
+    expect(otherTheme("light")).toBe("dark");
+  });
+});
+
+describe("humanise", () => {
+  const trace = parseTrace(fixture("minimal-violation"));
+
+  it("swaps a client node id for its label", () => {
+    const first = trace.history[0]!.client;
+    expect(humanise(trace, `client ${first} reads y -> 2`)).toBe("client A reads y -> 2");
+  });
+
+  it("leaves replica ids alone", () => {
+    expect(humanise(trace, "n2 coordinated both writes")).toBe("n2 coordinated both writes");
+  });
+
+  it("leaves an unknown client alone", () => {
+    expect(humanise(trace, "client 99 did something")).toBe("client 99 did something");
+  });
+
+  it("rewrites every mention", () => {
+    const [a, b] = [trace.history[0]!.client, trace.history[1]!.client];
+    expect(humanise(trace, `client ${a} and client ${b}`)).toBe("client A and client B");
   });
 });
