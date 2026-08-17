@@ -52,7 +52,10 @@ def shrink_command(seed: int, budget: int, output: Path | None, **params: Any) -
     _print_sizes(reduction)
     console.print()
     for line in narrate(reduction):
-        console.print(f"  {line}")
+        # No extra indent: the widened operation column plus the violation marker
+        # already reaches an 80-column terminal, and a wrapped counterexample is
+        # not a readable one.
+        console.print(line)
     console.print()
     console.print(f"[dim]{reduction.verdict.explanation}[/dim]")
 
