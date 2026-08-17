@@ -31,6 +31,9 @@ dev = [
     "hypothesis>=6.98",
     "jsonschema>=4.21",
     "mypy>=1.9",
+    # Only scripts/record_demo.py needs it, but leaving it out meant mypy
+    # passed locally and failed in CI, which is the worst of both.
+    "pillow>=11.0",
     "pytest>=8.0",
     "pytest-cov>=4.1",
     "ruff>=0.4",
