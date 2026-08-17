@@ -1,8 +1,11 @@
 # Architecture decisions
 
-Short records of the choices that were expensive to reverse, in the order they
-were made. Each one states the alternatives that lost and why, including the
-consequences I do not like.
+Short records of the choices that were expensive to reverse. Each one states
+the alternatives that lost and why, including the consequences I do not like.
+
+Numbered in the order they were assigned, which is not quite the order they were
+decided: 0005 was reserved for the replayer early and written up once the
+replayer existed.
 
 | # | Decision | Date |
 |---|---|---|
