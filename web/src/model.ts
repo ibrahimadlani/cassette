@@ -203,6 +203,107 @@ export function buildFlights(trace: Trace): Flight[] {
   return flights;
 }
 
+export interface Band {
+  from: number;
+  to: number;
+}
+
+export interface Outage extends Band {
+  node: number;
+  kind: "down" | "paused";
+}
+
+/** When the cluster was split, as spans of logical time. */
+export function partitionBands(trace: Trace, span: number): Band[] {
+  const bands: Band[] = [];
+  let open: number | null = null;
+  for (const event of trace.events) {
+    if (event.type === "partition_start" && open === null) open = event.t;
+    if (event.type === "partition_end" && open !== null) {
+      bands.push({ from: open, to: event.t });
+      open = null;
+    }
+  }
+  // A partition still open when the run stopped runs to the end of the chart
+  // rather than vanishing, which is what actually happened.
+  if (open !== null) bands.push({ from: open, to: span });
+  return bands;
+}
+
+/** When each node was down or frozen. */
+export function nodeOutages(trace: Trace, span: number): Outage[] {
+  const outages: Outage[] = [];
+  const open = new Map<number, { from: number; kind: "down" | "paused" }>();
+
+  for (const event of trace.events) {
+    const node = event.node;
+    if (node === undefined) continue;
+
+    if (event.type === "node_crash") open.set(node, { from: event.t, kind: "down" });
+    else if (event.type === "node_pause") open.set(node, { from: event.t, kind: "paused" });
+    else if (event.type === "node_restart" || event.type === "node_resume") {
+      const started = open.get(node);
+      if (started) {
+        outages.push({ node, from: started.from, to: event.t, kind: started.kind });
+        open.delete(node);
+      }
+    }
+  }
+
+  for (const [node, started] of open) {
+    outages.push({ node, from: started.from, to: span, kind: started.kind });
+  }
+  return outages;
+}
+
+/**
+ * A round spacing for the time axis, close to a tenth of the span.
+ *
+ * Ticks at 137 ms are worse than no ticks: the reader stops reading the run and
+ * starts reading the axis.
+ */
+export function tickStep(span: number): number {
+  const rough = span / 10;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(rough, 1))));
+  const nice = [1, 2, 5, 10].map((multiple) => multiple * magnitude);
+  return nice.find((candidate) => candidate >= rough) ?? magnitude * 10;
+}
+
+/** Every tick on the axis, including both ends. */
+export function ticks(span: number): number[] {
+  const step = tickStep(span);
+  const out: number[] = [];
+  for (let t = 0; t <= span; t += step) out.push(t);
+  return out;
+}
+
+/** A version stamp as `counter.node`, or an em dash for the initial value. */
+export function stamp(version: [number, number] | undefined): string {
+  if (!version) return "—";
+  const [counter, node] = version;
+  return counter === 0 ? "—" : `${counter}.${node}`;
+}
+
+/**
+ * Whether two replicas hold different values under the same version stamp.
+ *
+ * This is the shape of the bug the demo exists to show, and it is visible in
+ * the replica table several seconds before any client notices.
+ */
+export function disagreeUnderTheSameStamp(
+  values: (number | null)[],
+  stamps: string[],
+): boolean {
+  const byStamp = new Map<string, Set<number | null>>();
+  stamps.forEach((key, index) => {
+    if (key === "—") return;
+    const seen = byStamp.get(key) ?? new Set<number | null>();
+    seen.add(values[index] ?? null);
+    byStamp.set(key, seen);
+  });
+  return Array.from(byStamp.values()).some((seen) => seen.size > 1);
+}
+
 /** The index of the last frame at or before `t`. */
 export function frameAt(frames: Frame[], t: number): number {
   let low = 0;
